@@ -1,28 +1,38 @@
 <template>
   <div class="app">
     <header class="app-header">
-      <h1>GLPI Metrics</h1>
+      <div class="header-left">
+        <h1>GLPI Metrics</h1>
+        <nav class="app-nav">
+          <button class="nav-btn" :class="{ active: currentView === 'dashboard' }" @click="currentView = 'dashboard'">Dashboard</button>
+          <button class="nav-btn" :class="{ active: currentView === 'tickets' }" @click="currentView = 'tickets'">Tickets by Group</button>
+        </nav>
+      </div>
       <div class="header-actions">
         <button class="theme-btn" @click="theme = theme === 'dark' ? 'light' : 'dark'">
           {{ theme === 'dark' ? 'Light mode' : 'Dark mode' }}
         </button>
-        <button class="export-btn" :disabled="loading" @click="openExportDialog">
-          Export PPT
-        </button>
-        <button class="outline-btn" :class="{ active: reorderMode }" @click="reorderMode = !reorderMode">
-          {{ reorderMode ? 'Done' : 'Reorder' }}
-        </button>
+        <template v-if="currentView === 'dashboard'">
+          <button class="export-btn" :disabled="loading" @click="openExportDialog">
+            Export PPT
+          </button>
+          <button class="outline-btn" :class="{ active: reorderMode }" @click="reorderMode = !reorderMode">
+            {{ reorderMode ? 'Done' : 'Reorder' }}
+          </button>
+        </template>
         <button class="refresh-btn" :disabled="loading" @click="load">
           {{ loading ? 'Loading…' : 'Refresh' }}
         </button>
       </div>
     </header>
 
-    <div v-if="error" class="error-banner">
+    <div v-if="error && !loading" class="error-banner">
       {{ error }}
     </div>
 
-    <main v-else class="content">
+    <TicketsByGroup v-if="!error && currentView === 'tickets'" :tickets="processedTickets" />
+
+    <main v-else-if="!error && currentView === 'dashboard'" class="content">
       <!-- Summary stat cards -->
       <draggable
         v-model="cardOrder"
@@ -158,6 +168,7 @@ import ComplianceChart from './components/ComplianceChart.vue'
 import GroupChart from './components/GroupChart.vue'
 import WeeklyBarChart from './components/WeeklyBarChart.vue'
 import PieChart from './components/PieChart.vue'
+import TicketsByGroup from './pages/TicketsByGroup.vue'
 import { fetchMetrics, STATUS, PRIORITY } from './api/glpi.js'
 
 const STATUS_COLORS = {
@@ -216,6 +227,7 @@ const metrics = ref({
 const processedTickets = ref([])
 
 // ── UI state ─────────────────────────────────────────────────────────────────
+const currentView = ref('dashboard') // 'dashboard' | 'tickets'
 const period      = ref('week')
 const loading     = ref(false)
 const error       = ref(null)
@@ -680,15 +692,43 @@ body {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 20px 32px;
+  padding: 16px 32px;
   border-bottom: 1px solid var(--border);
+  gap: 16px;
 }
+
+.header-left {
+  display: flex;
+  align-items: center;
+  gap: 24px;
+}
+
 .app-header h1 {
   font-size: 1.4rem;
   font-weight: 700;
   color: var(--accent);
   letter-spacing: -0.02em;
+  white-space: nowrap;
 }
+
+.app-nav {
+  display: flex;
+  gap: 2px;
+}
+
+.nav-btn {
+  background: none;
+  border: none;
+  border-radius: 6px;
+  color: var(--text-muted);
+  font-size: 0.85rem;
+  font-weight: 500;
+  padding: 7px 14px;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+.nav-btn:hover { background: rgba(255,255,255,0.06); color: var(--text); }
+.nav-btn.active { background: color-mix(in srgb, var(--accent) 12%, transparent); color: var(--accent); font-weight: 600; }
 
 .header-actions { display: flex; align-items: center; gap: 8px; }
 

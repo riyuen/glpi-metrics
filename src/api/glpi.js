@@ -5,6 +5,9 @@ const USER_TOKEN = import.meta.env.VITE_GLPI_USER_TOKEN
 // In production, set BASE to your full GLPI URL + /apirest.php
 const BASE = '/glpi-api/apirest.php'
 
+// Base URL of the GLPI web UI — used to build ticket links
+export const GLPI_URL = (import.meta.env.VITE_GLPI_URL ?? '').replace(/\/$/, '')
+
 // GLPI ticket status codes
 export const STATUS = {
   1: 'New',
@@ -63,8 +66,8 @@ let _entityNames = null
 let _entityNamesExp = 0
 
 const PAGE_SIZE = 1000
-// field 15 = opening date
-const TICKET_FIELDS = 'forcedisplay[0]=1&forcedisplay[1]=12&forcedisplay[2]=10&forcedisplay[3]=15'
+// fields: 1=id, 2=name, 10=priority, 12=status, 15=opening date
+const TICKET_FIELDS = 'forcedisplay[0]=1&forcedisplay[1]=2&forcedisplay[2]=12&forcedisplay[3]=10&forcedisplay[4]=15'
 
 // Returns true if the ticket has breached its TTO or TTR SLA.
 // A ticket with no SLA deadlines at all is considered compliant.
@@ -158,7 +161,8 @@ async function fetchGroupMap(sessionToken) {
     fetchAll(sessionToken, 'Group_Ticket'),
   ])
 
-  const groupNames = Object.fromEntries(groups.map((g) => [g.id, g.name]))
+  const cleanName = (name) => name.replace(/^G_SEC_USR_TAUTURU_/i, '')
+  const groupNames = Object.fromEntries(groups.map((g) => [g.id, cleanName(g.name)]))
 
   const map = {}
   for (const item of groupTickets) {
@@ -213,6 +217,7 @@ export async function fetchMetrics() {
 
       for (const ticket of tickets) {
         const id = ticket.id ?? ticket[1]
+        const name = ticket[2] ?? ticket.name ?? ''
         const status = ticket[12] ?? ticket.status
         const priority = ticket[10] ?? ticket.priority
         const date = ticket[15] ?? ticket.date
@@ -258,6 +263,9 @@ export async function fetchMetrics() {
           : null
 
         processedTickets.push({
+          id,
+          name,
+          date,
           status: statusNum,
           priority: Number(priority),
           week,

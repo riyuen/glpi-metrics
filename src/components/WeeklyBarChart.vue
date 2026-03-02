@@ -65,10 +65,10 @@ function buildChart() {
       plugins: {
         legend: { display: false },
         datalabels: {
-          anchor: 'end',
-          align: 'end',
-          color: C.value.tick,
-          font: { size: 11 },
+          anchor: 'center',
+          align: 'center',
+          color: '#fff',
+          font: { size: 11, weight: 'bold' },
           formatter: (value) => (value > 0 ? value : ''),
         },
       },

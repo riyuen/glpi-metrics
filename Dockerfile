@@ -8,11 +8,13 @@ RUN npm ci
 
 COPY . .
 
-# Tokens are baked into the JS bundle at build time
+# These are baked into the JS bundle at build time
 ARG VITE_GLPI_APP_TOKEN
 ARG VITE_GLPI_USER_TOKEN
+ARG VITE_GLPI_URL
 ENV VITE_GLPI_APP_TOKEN=$VITE_GLPI_APP_TOKEN
 ENV VITE_GLPI_USER_TOKEN=$VITE_GLPI_USER_TOKEN
+ENV VITE_GLPI_URL=$VITE_GLPI_URL
 
 RUN npm run build
 

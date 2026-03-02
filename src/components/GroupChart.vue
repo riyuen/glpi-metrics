@@ -99,6 +99,10 @@ function buildChart() {
     ]
   }
 
+  const compliantCounts    = filtered.value.map((g) => g.compliant)
+  const nonCompliantCounts = filtered.value.map((g) => g.nonCompliant)
+  const totalCounts        = filtered.value.map((g) => g.compliant + g.nonCompliant)
+
   new Chart(canvas.value, {
     type: 'bar',
     plugins: [ChartDataLabels],
@@ -108,12 +112,14 @@ function buildChart() {
         {
           label: 'Compliant',
           data: filtered.value.map((g) => pct(g)[0]),
+          counts: compliantCounts,
           backgroundColor: 'rgba(16,185,129,0.8)',
           borderRadius: 3,
         },
         {
           label: 'Non-compliant',
           data: filtered.value.map((g) => pct(g)[1]),
+          counts: nonCompliantCounts,
           backgroundColor: 'rgba(239,68,68,0.8)',
           borderRadius: 3,
         },
@@ -133,6 +139,18 @@ function buildChart() {
         legend: {
           display: true,
           labels: { color: C.value.tick, boxWidth: 12, padding: 16 },
+        },
+        tooltip: {
+          callbacks: {
+            title: (items) => {
+              const idx = items[0].dataIndex
+              return `${items[0].label}  (${totalCounts[idx]} tickets)`
+            },
+            label: (item) => {
+              const count = item.dataset.counts[item.dataIndex]
+              return ` ${item.dataset.label}: ${count} (${item.raw}%)`
+            },
+          },
         },
         datalabels: {
           anchor: 'center',
