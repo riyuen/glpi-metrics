@@ -18,7 +18,9 @@ const props = defineProps({
   data: Array,
   color: { type: String, default: '#f59e0b' },
   theme: { type: String, default: 'dark' },
+  highlightedPeriods: { type: Array, default: () => [] },
 })
+const emit = defineEmits(['item-click'])
 
 const C = computed(() => props.theme === 'light'
   ? { tick: '#475569', grid: '#cbd5e1', gridFaint: '#f1f5f9' }
@@ -33,6 +35,11 @@ function buildChart() {
 
   if (!props.labels?.length) return
 
+  const hl = new Set(props.highlightedPeriods)
+  const hasHl = hl.size > 0
+  const dimColor = props.color.replace(/[\d.]+\)$/, '0.12)')
+  const colors = props.labels.map((l) => hasHl && !hl.has(l) ? dimColor : props.color)
+
   new Chart(canvas.value, {
     type: 'bar',
     plugins: [ChartDataLabels],
@@ -41,7 +48,7 @@ function buildChart() {
       datasets: [
         {
           data: props.data,
-          backgroundColor: props.color,
+          backgroundColor: colors,
           borderRadius: 3,
         },
       ],
@@ -49,6 +56,12 @@ function buildChart() {
     options: {
       responsive: true,
       maintainAspectRatio: false,
+      onClick: (event, elements) => {
+        if (elements.length > 0) emit('item-click', props.labels[elements[0].index])
+      },
+      onHover: (event, elements) => {
+        event.native.target.style.cursor = elements.length > 0 ? 'pointer' : 'default'
+      },
       plugins: {
         legend: { display: false },
         datalabels: {
@@ -75,7 +88,7 @@ function buildChart() {
 }
 
 onMounted(() => {
-  watch([() => props.labels, () => props.data, () => props.theme], buildChart, { deep: true, immediate: true })
+  watch([() => props.labels, () => props.data, () => props.theme, () => props.highlightedPeriods], buildChart, { deep: true, immediate: true })
 })
 
 onUnmounted(() => {

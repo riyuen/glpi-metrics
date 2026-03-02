@@ -17,7 +17,9 @@ const props = defineProps({
   // Array of { week, compliant, nonCompliant }
   weekData: Array,
   theme: { type: String, default: 'dark' },
+  highlightedPeriods: { type: Array, default: () => [] },
 })
+const emit = defineEmits(['item-click'])
 
 const C = computed(() => props.theme === 'light'
   ? { tick: '#475569', grid: '#cbd5e1', gridFaint: '#f1f5f9' }
@@ -36,6 +38,11 @@ function buildChart() {
   const compliant = props.weekData.map((d) => d.compliant)
   const nonCompliant = props.weekData.map((d) => d.nonCompliant)
 
+  const hl = new Set(props.highlightedPeriods)
+  const hasHl = hl.size > 0
+  const compliantBg    = labels.map((l) => hasHl && !hl.has(l) ? 'rgba(16,185,129,0.12)' : 'rgba(16,185,129,0.8)')
+  const nonCompliantBg = labels.map((l) => hasHl && !hl.has(l) ? 'rgba(239,68,68,0.12)'  : 'rgba(239,68,68,0.8)')
+
   new Chart(canvas.value, {
     type: 'bar',
     plugins: [ChartDataLabels],
@@ -45,13 +52,13 @@ function buildChart() {
         {
           label: 'Compliant',
           data: compliant,
-          backgroundColor: 'rgba(16,185,129,0.8)',
+          backgroundColor: compliantBg,
           borderRadius: 3,
         },
         {
           label: 'Non-compliant',
           data: nonCompliant,
-          backgroundColor: 'rgba(239,68,68,0.8)',
+          backgroundColor: nonCompliantBg,
           borderRadius: 3,
         },
       ],
@@ -59,6 +66,12 @@ function buildChart() {
     options: {
       responsive: true,
       maintainAspectRatio: false,
+      onClick: (event, elements) => {
+        if (elements.length > 0) emit('item-click', props.weekData[elements[0].index].week)
+      },
+      onHover: (event, elements) => {
+        event.native.target.style.cursor = elements.length > 0 ? 'pointer' : 'default'
+      },
       plugins: {
         legend: {
           display: true,
@@ -88,7 +101,7 @@ function buildChart() {
 }
 
 onMounted(() => {
-  watch([() => props.weekData, () => props.theme], buildChart, { deep: true, immediate: true })
+  watch([() => props.weekData, () => props.theme, () => props.highlightedPeriods], buildChart, { deep: true, immediate: true })
 })
 
 onUnmounted(() => {

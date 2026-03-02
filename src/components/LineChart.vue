@@ -17,7 +17,9 @@ const props = defineProps({
   labels: Array,
   data: Array,
   theme: { type: String, default: 'dark' },
+  highlightedPeriods: { type: Array, default: () => [] },
 })
+const emit = defineEmits(['item-click'])
 
 const C = computed(() => props.theme === 'light'
   ? { tick: '#475569', grid: '#cbd5e1', gridFaint: '#f1f5f9' }
@@ -33,6 +35,12 @@ function buildChart() {
 
   if (!props.labels?.length) return
 
+  const hl = new Set(props.highlightedPeriods)
+  const hasHl = hl.size > 0
+  const pointColors  = props.labels.map((l) => hasHl && !hl.has(l) ? 'rgba(56,189,248,0.2)' : '#38bdf8')
+  const pointRadii   = props.labels.map((l) => hasHl && !hl.has(l) ? 3 : 5)
+  const labelColors  = props.labels.map((l) => hasHl && !hl.has(l) ? 'transparent' : C.value.tick)
+
   new Chart(canvas.value, {
     type: 'line',
     plugins: [ChartDataLabels],
@@ -42,13 +50,13 @@ function buildChart() {
         {
           data: props.data,
           borderColor: '#38bdf8',
-          backgroundColor: 'rgba(56,189,248,0.08)',
+          backgroundColor: hasHl ? 'rgba(56,189,248,0.03)' : 'rgba(56,189,248,0.08)',
           borderWidth: 2,
           tension: 0.3,
           fill: true,
-          pointRadius: 4,
+          pointRadius: pointRadii,
           pointHoverRadius: 6,
-          pointBackgroundColor: '#38bdf8',
+          pointBackgroundColor: pointColors,
         },
       ],
     },
@@ -56,6 +64,12 @@ function buildChart() {
       responsive: true,
       maintainAspectRatio: false,
       layout: { padding: { top: 20 } },
+      onClick: (event, elements) => {
+        if (elements.length > 0) emit('item-click', props.labels[elements[0].index])
+      },
+      onHover: (event, elements) => {
+        event.native.target.style.cursor = elements.length > 0 ? 'pointer' : 'default'
+      },
       plugins: {
         legend: { display: false },
         tooltip: {
@@ -66,7 +80,7 @@ function buildChart() {
         datalabels: {
           anchor: 'end',
           align: 'top',
-          color: C.value.tick,
+          color: (ctx) => labelColors[ctx.dataIndex],
           font: { size: 11 },
           formatter: (value) => value,
         },
@@ -87,7 +101,7 @@ function buildChart() {
 }
 
 onMounted(() => {
-  watch([() => props.labels, () => props.data, () => props.theme], buildChart, { deep: true, immediate: true })
+  watch([() => props.labels, () => props.data, () => props.theme, () => props.highlightedPeriods], buildChart, { deep: true, immediate: true })
 })
 
 onUnmounted(() => {

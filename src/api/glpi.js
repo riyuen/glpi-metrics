@@ -252,8 +252,13 @@ export async function fetchMetrics() {
 
         byEntity[entity] = (byEntity[entity] ?? 0) + 1
 
+        const statusNum = Number(status)
+        const rawResolveMs = (statusNum === 5 || statusNum === 6) && ticket.solvedate && date
+          ? new Date(ticket.solvedate) - new Date(date)
+          : null
+
         processedTickets.push({
-          status: Number(status),
+          status: statusNum,
           priority: Number(priority),
           week,
           month,
@@ -261,6 +266,7 @@ export async function fetchMetrics() {
           entity,
           breached,
           hasNoTTO: !ticket.begin_waiting_date,
+          resolveMs: rawResolveMs > 0 ? rawResolveMs : null,
         })
       }
 

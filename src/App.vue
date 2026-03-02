@@ -68,6 +68,10 @@
           Entity: {{ activeFilters.entities.join(', ') }}
           <button @click.stop="activeFilters.entities.length = 0">×</button>
         </span>
+        <span v-if="activeFilters.periods.length" class="filter-chip">
+          {{ period === 'week' ? 'Week' : 'Month' }}: {{ activeFilters.periods.join(', ') }}
+          <button @click.stop="activeFilters.periods.length = 0">×</button>
+        </span>
         <span v-if="activeFilters.compliance" class="filter-chip">
           {{ activeFilters.compliance === 'compliant' ? 'Compliant only' : 'Non-compliant only' }}
           <button @click.stop="activeFilters.compliance = null">×</button>
@@ -237,14 +241,19 @@ const activeFilters = reactive({
   groups:     [],
   entities:   [],
   compliance: null, // null | 'compliant' | 'nonCompliant'
+  periods:    [],   // week/month label strings matching current period
 })
+
+// Clear period filter when switching between weekly/monthly view
+watch(period, () => { activeFilters.periods.length = 0 })
 
 const hasActiveFilters = computed(() =>
   activeFilters.statuses.length > 0 ||
   activeFilters.priorities.length > 0 ||
   activeFilters.groups.length > 0 ||
   activeFilters.entities.length > 0 ||
-  activeFilters.compliance !== null
+  activeFilters.compliance !== null ||
+  activeFilters.periods.length > 0
 )
 
 function toggleFilter(dimension, value) {
@@ -259,6 +268,7 @@ function clearFilters() {
   activeFilters.priorities.length = 0
   activeFilters.groups.length     = 0
   activeFilters.entities.length   = 0
+  activeFilters.periods.length    = 0
   activeFilters.compliance        = null
 }
 
@@ -280,7 +290,9 @@ function handleCardClick(id) {
 }
 
 // ── Filtered tickets + chart metrics ─────────────────────────────────────────
-const filteredTickets = computed(() => {
+
+// Base filter: everything except period — used for time-series charts (they show all periods)
+const baseFilteredTickets = computed(() => {
   let ts = processedTickets.value
   if (activeFilters.statuses.length)   ts = ts.filter(t => activeFilters.statuses.includes(t.status))
   if (activeFilters.priorities.length) ts = ts.filter(t => activeFilters.priorities.includes(t.priority))
@@ -288,6 +300,16 @@ const filteredTickets = computed(() => {
   if (activeFilters.entities.length)   ts = ts.filter(t => activeFilters.entities.includes(t.entity))
   if (activeFilters.compliance === 'compliant')    ts = ts.filter(t => !t.breached)
   if (activeFilters.compliance === 'nonCompliant') ts = ts.filter(t => t.breached)
+  return ts
+})
+
+// Full filter: base + period — used for stat cards and non-time charts
+const filteredTickets = computed(() => {
+  let ts = baseFilteredTickets.value
+  if (activeFilters.periods.length) {
+    const field = period.value === 'week' ? 'week' : 'month'
+    ts = ts.filter(t => activeFilters.periods.includes(t[field]))
+  }
   return ts
 })
 
@@ -340,24 +362,24 @@ function computeChartMetrics(tickets) {
   }
 }
 
-const chartMetrics = computed(() => computeChartMetrics(filteredTickets.value))
+const chartMetrics     = computed(() => computeChartMetrics(filteredTickets.value))
+// Time charts see all periods (base filter, no period restriction) — they highlight instead
+const timeChartMetrics = computed(() => computeChartMetrics(baseFilteredTickets.value))
 
-// ── Stat card computeds (global / unfiltered) ─────────────────────────────────
-const compliancePct = computed(() => {
-  const groups = Object.values(metrics.value.byGroupCompliance)
-  const compliant = groups.reduce((s, g) => s + g.compliant, 0)
-  const total     = groups.reduce((s, g) => s + g.compliant + g.nonCompliant, 0)
-  return total === 0 ? '—' : `${Math.round((compliant / total) * 100)}%`
-})
-const compliantCount = computed(() =>
-  Object.values(metrics.value.byGroupCompliance).reduce((s, g) => s + g.compliant, 0)
-)
-const nonCompliantCount = computed(() =>
-  Object.values(metrics.value.byGroupCompliance).reduce((s, g) => s + g.nonCompliant, 0)
-)
-const avgResolveDisplay = computed(() => {
-  const h = metrics.value.avgResolveHours
-  return h === null ? '—' : `${h}h`
+// ── Stat card computeds (reflect all active filters including period) ──────────
+const filteredStats = computed(() => {
+  const ts = filteredTickets.value
+  const total        = ts.length
+  const open         = ts.filter(t => t.status !== 5 && t.status !== 6).length
+  const solved       = ts.filter(t => t.status === 5 || t.status === 6).length
+  const compliant    = ts.filter(t => !t.breached).length
+  const nonCompliant = ts.filter(t => t.breached).length
+  const pct          = total === 0 ? '—' : `${Math.round((compliant / total) * 100)}%`
+  const resolvedTs   = ts.filter(t => t.resolveMs != null)
+  const avgH         = resolvedTs.length > 0
+    ? Math.round(resolvedTs.reduce((s, t) => s + t.resolveMs, 0) / resolvedTs.length / 3600000)
+    : null
+  return { total, open, solved, compliant, nonCompliant, pct, avgH }
 })
 
 // Which stat cards are "active" (match a current filter exactly)
@@ -371,15 +393,19 @@ const cardActive = computed(() => {
   }
 })
 
-const cardData = computed(() => ({
-  open:         { label: 'Open Tickets',    value: loading.value ? '—' : metrics.value.openCount,                                                                        clickable: true,  active: cardActive.value.open },
-  total:        { label: 'Total Tickets',   value: loading.value ? '—' : metrics.value.total,                                                                            clickable: false, active: false },
-  solved:       { label: 'Closed / Solved', value: loading.value ? '—' : (metrics.value.byStatus[5] ?? 0) + (metrics.value.byStatus[6] ?? 0),                           clickable: true,  active: cardActive.value.solved },
-  compliance:   { label: 'SLA Compliance',  value: loading.value ? '—' : compliancePct.value,                                                                            clickable: false, active: false },
-  compliant:    { label: 'Compliant',        value: loading.value ? '—' : compliantCount.value,                                                                          clickable: true,  active: cardActive.value.compliant },
-  nonCompliant: { label: 'Non-Compliant',    value: loading.value ? '—' : nonCompliantCount.value,                                                                       clickable: true,  active: cardActive.value.nonCompliant },
-  avgResolve:   { label: 'Avg. Resolve',     value: loading.value ? '—' : avgResolveDisplay.value,                                                                       clickable: false, active: false },
-}))
+const cardData = computed(() => {
+  const s = filteredStats.value
+  const v = (x) => loading.value ? '—' : x
+  return {
+    open:         { label: 'Open Tickets',    value: v(s.open),                                  clickable: true,  active: cardActive.value.open },
+    total:        { label: 'Total Tickets',   value: v(s.total),                                 clickable: false, active: false },
+    solved:       { label: 'Closed / Solved', value: v(s.solved),                                clickable: true,  active: cardActive.value.solved },
+    compliance:   { label: 'SLA Compliance',  value: v(s.pct),                                   clickable: false, active: false },
+    compliant:    { label: 'Compliant',        value: v(s.compliant),                             clickable: true,  active: cardActive.value.compliant },
+    nonCompliant: { label: 'Non-Compliant',    value: v(s.nonCompliant),                          clickable: true,  active: cardActive.value.nonCompliant },
+    avgResolve:   { label: 'Avg. Resolve',     value: v(s.avgH === null ? '—' : `${s.avgH}h`),   clickable: false, active: false },
+  }
+})
 
 // ── Chart data computeds (use chartMetrics = filtered) ───────────────────────
 // Status/Priority: use global counts but dim non-selected items
@@ -408,21 +434,22 @@ const priorityItems = computed(() =>
   })
 )
 
+// Time charts use timeChartMetrics (all periods visible) + highlighted periods passed separately
 const periodLabels = computed(() =>
-  Object.keys(period.value === 'week' ? chartMetrics.value.byWeek : chartMetrics.value.byMonth)
+  Object.keys(period.value === 'week' ? timeChartMetrics.value.byWeek : timeChartMetrics.value.byMonth)
 )
 const periodData = computed(() =>
-  Object.values(period.value === 'week' ? chartMetrics.value.byWeek : chartMetrics.value.byMonth)
+  Object.values(period.value === 'week' ? timeChartMetrics.value.byWeek : timeChartMetrics.value.byMonth)
 )
 const periodCompliance = computed(() => {
-  const src = period.value === 'week' ? chartMetrics.value.byWeekCompliance : chartMetrics.value.byMonthCompliance
+  const src = period.value === 'week' ? timeChartMetrics.value.byWeekCompliance : timeChartMetrics.value.byMonthCompliance
   return Object.entries(src).map(([week, v]) => ({ week, ...v }))
 })
 const periodNoTTOLabels = computed(() =>
-  Object.keys(period.value === 'week' ? chartMetrics.value.byWeekNoTTO : chartMetrics.value.byMonthNoTTO)
+  Object.keys(period.value === 'week' ? timeChartMetrics.value.byWeekNoTTO : timeChartMetrics.value.byMonthNoTTO)
 )
 const periodNoTTOData = computed(() =>
-  Object.values(period.value === 'week' ? chartMetrics.value.byWeekNoTTO : chartMetrics.value.byMonthNoTTO)
+  Object.values(period.value === 'week' ? timeChartMetrics.value.byWeekNoTTO : timeChartMetrics.value.byMonthNoTTO)
 )
 const groupComplianceData = computed(() =>
   Object.entries(chartMetrics.value.byGroupCompliance)
@@ -435,22 +462,25 @@ const chartProps = computed(() => ({
   status: { title: 'By Status',   items: statusItems.value },
   priority: { title: 'By Priority', items: priorityItems.value },
   line: {
-    title:  period.value === 'week' ? 'Tickets opened by week' : 'Tickets opened by month',
-    labels: periodLabels.value,
-    data:   periodData.value,
-    theme:  theme.value,
+    title:             period.value === 'week' ? 'Tickets opened by week' : 'Tickets opened by month',
+    labels:            periodLabels.value,
+    data:              periodData.value,
+    theme:             theme.value,
+    highlightedPeriods: activeFilters.periods,
   },
   compliance: {
-    title:    period.value === 'week' ? 'SLA compliance by week' : 'SLA compliance by month',
-    weekData: periodCompliance.value,
-    theme:    theme.value,
+    title:             period.value === 'week' ? 'SLA compliance by week' : 'SLA compliance by month',
+    weekData:          periodCompliance.value,
+    theme:             theme.value,
+    highlightedPeriods: activeFilters.periods,
   },
   noTTO: {
-    title:  'Tickets not taken into account',
-    labels: periodNoTTOLabels.value,
-    data:   periodNoTTOData.value,
-    color:  'rgba(245,158,11,0.8)',
-    theme:  theme.value,
+    title:             'Tickets not taken into account',
+    labels:            periodNoTTOLabels.value,
+    data:              periodNoTTOData.value,
+    color:             'rgba(245,158,11,0.8)',
+    theme:             theme.value,
+    highlightedPeriods: activeFilters.periods,
   },
   group: {
     title:  'SLA compliance by group',
@@ -469,9 +499,9 @@ const chartEvents = computed(() => ({
   priority:   { 'item-click': (code) => toggleFilter('priorities', code) },
   group:      { 'item-click': (name) => toggleFilter('groups',     name) },
   entities:   { 'item-click': (name) => toggleFilter('entities',   name) },
-  line:       {},
-  compliance: {},
-  noTTO:      {},
+  line:       { 'item-click': (label) => toggleFilter('periods',   label) },
+  compliance: { 'item-click': (label) => toggleFilter('periods',   label) },
+  noTTO:      { 'item-click': (label) => toggleFilter('periods',   label) },
 }))
 
 // ── PowerPoint export ─────────────────────────────────────────────────────────
@@ -545,6 +575,7 @@ async function exportToPptx(ids) {
       if (activeFilters.priorities.length) parts.push(`Priority: ${activeFilters.priorities.map(p => PRIORITY[p]).join(', ')}`)
       if (activeFilters.groups.length)     parts.push(`Group: ${activeFilters.groups.join(', ')}`)
       if (activeFilters.entities.length)   parts.push(`Entity: ${activeFilters.entities.join(', ')}`)
+      if (activeFilters.periods.length)    parts.push(`${period.value === 'week' ? 'Week' : 'Month'}: ${activeFilters.periods.join(', ')}`)
       if (activeFilters.compliance)        parts.push(activeFilters.compliance === 'compliant' ? 'Compliant only' : 'Non-compliant only')
       titleSlide.addText(`Filtered by: ${parts.join('  •  ')}`, {
         x: 0.5, y: 4.55, w: 12.33, h: 0.45,
