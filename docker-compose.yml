@@ -1,0 +1,16 @@
+services:
+  app:
+    build:
+      context: .
+      args:
+        # Baked into the JS bundle at build time
+        VITE_GLPI_APP_TOKEN: ${VITE_GLPI_APP_TOKEN}
+        VITE_GLPI_USER_TOKEN: ${VITE_GLPI_USER_TOKEN}
+    ports:
+      - "3000:80"
+    environment:
+      # Used by nginx to proxy /glpi-api/* → GLPI server (runtime)
+      # Only substitute this variable — leave nginx's own $uri etc. alone
+      NGINX_ENVSUBST_TEMPLATE_VARS: "$${GLPI_URL}"
+      GLPI_URL: ${VITE_GLPI_URL}
+    restart: unless-stopped
