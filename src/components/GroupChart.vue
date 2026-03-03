@@ -23,8 +23,10 @@
       </div>
     </div>
 
-    <div class="canvas-wrap" :style="{ height: Math.max(160, filtered.length * 44) + 'px' }">
-      <canvas ref="canvas" />
+    <div class="canvas-scroll">
+      <div class="canvas-wrap" :style="{ height: (height ?? Math.max(160, filtered.length * 44)) + 'px' }">
+        <canvas ref="canvas" />
+      </div>
     </div>
   </div>
 </template>
@@ -38,6 +40,7 @@ const props = defineProps({
   title: String,
   groups: Array, // [{ name, compliant, nonCompliant }]
   theme: { type: String, default: 'dark' },
+  height: { type: Number, default: null },
 })
 const emit = defineEmits(['item-click'])
 
@@ -294,7 +297,11 @@ onUnmounted(() => {
   flex-shrink: 0;
 }
 
-.canvas-wrap {
-  min-height: 160px;
+.canvas-scroll {
+  max-height: 400px;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: var(--border) transparent;
 }
+.canvas-wrap {}
 </style>

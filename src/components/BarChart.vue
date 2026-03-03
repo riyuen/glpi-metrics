@@ -55,6 +55,12 @@ function pct(count) {
   text-transform: uppercase;
   letter-spacing: 0.05em;
 }
+.bars {
+  max-height: 400px;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: var(--border) transparent;
+}
 .bar-row {
   display: flex;
   align-items: center;

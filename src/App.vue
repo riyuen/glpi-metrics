@@ -6,6 +6,7 @@
         <nav class="app-nav">
           <button class="nav-btn" :class="{ active: currentView === 'dashboard' }" @click="currentView = 'dashboard'">Dashboard</button>
           <button class="nav-btn" :class="{ active: currentView === 'tickets' }" @click="currentView = 'tickets'">Tickets by Group</button>
+          <button class="nav-btn" :class="{ active: currentView === 'satisfaction' }" @click="currentView = 'satisfaction'; loadSatisfaction()">Satisfaction</button>
         </nav>
       </div>
       <div class="header-actions">
@@ -13,12 +14,7 @@
           {{ theme === 'dark' ? 'Light mode' : 'Dark mode' }}
         </button>
         <template v-if="currentView === 'dashboard'">
-          <button class="export-btn" :disabled="loading" @click="openExportDialog">
-            Export PPT
-          </button>
-          <button class="outline-btn" :class="{ active: reorderMode }" @click="reorderMode = !reorderMode">
-            {{ reorderMode ? 'Done' : 'Reorder' }}
-          </button>
+          <button class="export-btn" :disabled="loading" @click="openExportDialog">Export PPT</button>
         </template>
         <button class="refresh-btn" :disabled="loading" @click="load">
           {{ loading ? 'Loading…' : 'Refresh' }}
@@ -32,15 +28,21 @@
 
     <TicketsByGroup v-if="!error && currentView === 'tickets'" :tickets="processedTickets" />
 
+    <Satisfaction
+      v-else-if="currentView === 'satisfaction'"
+      :records="satisfactionRecords"
+      :loading="satisfactionLoading"
+      :error="satisfactionError"
+      @refresh="loadSatisfaction(true)"
+    />
+
     <main v-else-if="!error && currentView === 'dashboard'" class="content">
       <!-- Summary stat cards -->
       <draggable
         v-model="cardOrder"
-        :disabled="!reorderMode"
         :item-key="id => id"
         tag="section"
         class="stat-row"
-        :class="{ 'reorder-mode': reorderMode }"
         handle=".card-drag-handle"
         ghost-class="card-ghost"
       >
@@ -48,12 +50,12 @@
           <div
             class="card-wrapper"
             :class="{
-              'card-clickable': !reorderMode && cardData[id].clickable,
+              'card-clickable': cardData[id].clickable,
               'card-active': cardData[id].active,
             }"
             @click="handleCardClick(id)"
           >
-            <button v-if="reorderMode" class="card-drag-handle" title="Drag to reorder">⠿</button>
+            <button class="card-drag-handle" title="Drag to reorder">⠿</button>
             <StatCard :label="cardData[id].label" :value="cardData[id].value" />
           </div>
         </template>
@@ -98,21 +100,28 @@
       <!-- Charts -->
       <draggable
         v-model="chartOrder"
-        :disabled="!reorderMode"
         :item-key="id => id"
         tag="section"
         class="charts-row"
-        :class="{ 'reorder-mode': reorderMode }"
         handle=".drag-handle"
         ghost-class="chart-ghost"
       >
         <template #item="{ element: id }">
           <div
             class="chart-wrapper"
+            :style="{
+              width: chartSizes[id]?.width != null ? chartSizes[id].width + 'px' : undefined,
+              flex:  chartSizes[id]?.width != null ? '0 0 auto' : undefined,
+            }"
             :ref="el => { if (el) chartRefs[id] = el; else delete chartRefs[id] }"
           >
-            <button v-if="reorderMode" class="drag-handle" title="Drag to reorder">⠿</button>
+            <button class="drag-handle" title="Drag to reorder">⠿</button>
             <component :is="COMP[id]" v-bind="chartProps[id]" v-on="chartEvents[id]" />
+            <div
+              class="resize-handle"
+              @mousedown.prevent="startResize($event, id)"
+              @touchstart.prevent="startResize($event, id)"
+            />
           </div>
         </template>
       </draggable>
@@ -159,7 +168,7 @@
 </template>
 
 <script setup>
-import { ref, computed, reactive, onMounted, watch, markRaw, nextTick } from 'vue'
+import { ref, computed, reactive, onMounted, onUnmounted, watch, markRaw, nextTick } from 'vue'
 import draggable from 'vuedraggable'
 import StatCard from './components/StatCard.vue'
 import BarChart from './components/BarChart.vue'
@@ -168,8 +177,12 @@ import ComplianceChart from './components/ComplianceChart.vue'
 import GroupChart from './components/GroupChart.vue'
 import WeeklyBarChart from './components/WeeklyBarChart.vue'
 import PieChart from './components/PieChart.vue'
+import TTOChart from './components/TTOChart.vue'
+import MTTRChart from './components/MTTRChart.vue'
+import TechTimeChart from './components/TechTimeChart.vue'
 import TicketsByGroup from './pages/TicketsByGroup.vue'
-import { fetchMetrics, STATUS, PRIORITY } from './api/glpi.js'
+import Satisfaction from './pages/Satisfaction.vue'
+import { fetchMetrics, fetchSatisfaction, STATUS, PRIORITY } from './api/glpi.js'
 
 const STATUS_COLORS = {
   1: '#3b82f6',
@@ -197,14 +210,19 @@ const COMP = {
   line:       markRaw(LineChart),
   compliance: markRaw(ComplianceChart),
   noTTO:      markRaw(WeeklyBarChart),
+  tto:        markRaw(TTOChart),
+  mttr:       markRaw(MTTRChart),
   group:      markRaw(GroupChart),
   entities:   markRaw(PieChart),
+  techTime:   markRaw(TechTimeChart),
 }
-const ALL_IDS      = ['status', 'priority', 'line', 'compliance', 'noTTO', 'group', 'entities']
+const ALL_IDS      = ['status', 'priority', 'line', 'compliance', 'noTTO', 'tto', 'mttr', 'group', 'entities', 'techTime']
 const ALL_CARD_IDS = ['open', 'total', 'solved', 'compliance', 'compliant', 'nonCompliant', 'avgResolve']
-const CHART_ORDER_KEY = 'glpi-chart-order'
-const CARD_ORDER_KEY  = 'glpi-card-order'
-const THEME_KEY       = 'glpi-theme'
+const CHART_ORDER_KEY  = 'glpi-chart-order'
+const CARD_ORDER_KEY   = 'glpi-card-order'
+const THEME_KEY        = 'glpi-theme'
+const CHART_SIZES_KEY  = 'glpi-chart-sizes'
+const DEFAULT_HEIGHTS  = { line: 220, compliance: 220, noTTO: 220, tto: 220, mttr: 220, entities: 260, group: null }
 
 function loadOrder(key, defaults) {
   try {
@@ -227,20 +245,25 @@ const metrics = ref({
 const processedTickets = ref([])
 
 // ── UI state ─────────────────────────────────────────────────────────────────
-const currentView = ref('dashboard') // 'dashboard' | 'tickets'
+const currentView = ref('dashboard') // 'dashboard' | 'tickets' | 'satisfaction'
 const period      = ref('week')
 const loading     = ref(false)
 const error       = ref(null)
 const lastUpdated = ref(null)
-const reorderMode = ref(false)
+const satisfactionRecords = ref([])
+const satisfactionLoading = ref(false)
+const satisfactionError   = ref(null)
 const exporting   = ref(false)
 const chartRefs   = {} // populated via :ref callbacks in the template
 const chartOrder  = ref(loadOrder(CHART_ORDER_KEY, ALL_IDS))
 const cardOrder   = ref(loadOrder(CARD_ORDER_KEY,  ALL_CARD_IDS))
 const theme       = ref(localStorage.getItem(THEME_KEY) ?? 'dark')
+const chartSizes  = ref(JSON.parse(localStorage.getItem(CHART_SIZES_KEY) ?? 'null') ?? {})
+const resizeState = reactive({ id: null, startX: 0, startY: 0, startW: 0, startH: 0 })
 
 watch(chartOrder, (o) => localStorage.setItem(CHART_ORDER_KEY, JSON.stringify(o)), { deep: true })
 watch(cardOrder,  (o) => localStorage.setItem(CARD_ORDER_KEY,  JSON.stringify(o)), { deep: true })
+watch(chartSizes, (s) => localStorage.setItem(CHART_SIZES_KEY, JSON.stringify(s)), { deep: true })
 watch(theme, (t) => {
   document.documentElement.classList.toggle('light', t === 'light')
   localStorage.setItem(THEME_KEY, t)
@@ -285,7 +308,6 @@ function clearFilters() {
 }
 
 function handleCardClick(id) {
-  if (reorderMode.value) return
   if (id === 'open') {
     const allOn = OPEN_STS.every(s => activeFilters.statuses.includes(s)) && activeFilters.statuses.length === OPEN_STS.length
     activeFilters.statuses.length = 0
@@ -330,8 +352,13 @@ function computeChartMetrics(tickets) {
   const byWeek = {}, byMonth = {}
   const byWeekCompliance = {}, byMonthCompliance = {}
   const byWeekNoTTO = {}, byMonthNoTTO = {}
+  const byWeekTTO = {}, byMonthTTO = {}
+  const ttoSlaGroups = new Map() // ttoSlaName → { targetH, minSlaTTOMs }
+  const byWeekMTTR = {}, byMonthMTTR = {}
+  const mttrSlaGroups = new Map() // slaName → { targetH, minSlaTTRMs }
   const byGroupCompliance = {}
   const byEntity = {}
+  const byTechGroup = {} // group → { techName → { sum: ms, count } }
 
   for (const t of tickets) {
     byStatus[t.status]   = (byStatus[t.status]   ?? 0) + 1
@@ -350,6 +377,55 @@ function computeChartMetrics(tickets) {
         byWeekNoTTO[t.week]   = (byWeekNoTTO[t.week]   ?? 0) + 1
         byMonthNoTTO[t.month] = (byMonthNoTTO[t.month] ?? 0) + 1
       }
+
+      // Collect SLA group metadata from every ticket that has an SLA deadline.
+      // min(slaTTRMs) per group = most optimistic calendar window ≈ nominal SLA target.
+      if (t.slaTTRName != null && t.slaTTRMs != null) {
+        if (!mttrSlaGroups.has(t.slaTTRName)) {
+          mttrSlaGroups.set(t.slaTTRName, { targetH: t.slaTTRTargetH ?? null, minSlaTTRMs: t.slaTTRMs })
+        } else {
+          const g = mttrSlaGroups.get(t.slaTTRName)
+          if (t.slaTTRTargetH != null && g.targetH === null) g.targetH = t.slaTTRTargetH
+          if (t.slaTTRMs < g.minSlaTTRMs) g.minSlaTTRMs = t.slaTTRMs
+        }
+      }
+
+      if (t.resolveMs != null) {
+        const slaKey = t.slaTTRName ?? 'No SLA'
+        if (!mttrSlaGroups.has(slaKey)) mttrSlaGroups.set(slaKey, { targetH: null, minSlaTTRMs: null })
+
+        if (!byWeekMTTR[t.week])          byWeekMTTR[t.week]          = {}
+        if (!byWeekMTTR[t.week][slaKey])  byWeekMTTR[t.week][slaKey]  = { sum: 0, count: 0 }
+        byWeekMTTR[t.week][slaKey].sum += t.resolveMs; byWeekMTTR[t.week][slaKey].count++
+
+        if (!byMonthMTTR[t.month])         byMonthMTTR[t.month]         = {}
+        if (!byMonthMTTR[t.month][slaKey]) byMonthMTTR[t.month][slaKey] = { sum: 0, count: 0 }
+        byMonthMTTR[t.month][slaKey].sum += t.resolveMs; byMonthMTTR[t.month][slaKey].count++
+      }
+
+      // Collect TTO SLA group metadata from every ticket that has a TTO deadline
+      if (t.ttoSlaName != null && t.slaTTOMs != null) {
+        if (!ttoSlaGroups.has(t.ttoSlaName)) {
+          ttoSlaGroups.set(t.ttoSlaName, { targetH: t.ttoSlaTargetH ?? null, minSlaTTOMs: t.slaTTOMs })
+        } else {
+          const g = ttoSlaGroups.get(t.ttoSlaName)
+          if (t.ttoSlaTargetH != null && g.targetH === null) g.targetH = t.ttoSlaTargetH
+          if (t.slaTTOMs < g.minSlaTTOMs) g.minSlaTTOMs = t.slaTTOMs
+        }
+      }
+
+      if (t.actualTTOMs != null) {
+        const slaKey = t.ttoSlaName ?? 'No SLA'
+        if (!ttoSlaGroups.has(slaKey)) ttoSlaGroups.set(slaKey, { targetH: null, minSlaTTOMs: null })
+
+        if (!byWeekTTO[t.week])          byWeekTTO[t.week]          = {}
+        if (!byWeekTTO[t.week][slaKey])  byWeekTTO[t.week][slaKey]  = { sum: 0, count: 0 }
+        byWeekTTO[t.week][slaKey].sum += t.actualTTOMs; byWeekTTO[t.week][slaKey].count++
+
+        if (!byMonthTTO[t.month])         byMonthTTO[t.month]         = {}
+        if (!byMonthTTO[t.month][slaKey]) byMonthTTO[t.month][slaKey] = { sum: 0, count: 0 }
+        byMonthTTO[t.month][slaKey].sum += t.actualTTOMs; byMonthTTO[t.month][slaKey].count++
+      }
     }
 
     if (!byGroupCompliance[t.group]) byGroupCompliance[t.group] = { compliant: 0, nonCompliant: 0 }
@@ -357,9 +433,38 @@ function computeChartMetrics(tickets) {
     else            byGroupCompliance[t.group].compliant++
 
     byEntity[t.entity] = (byEntity[t.entity] ?? 0) + 1
+
+    if (t.resolveMs != null && t.techName) {
+      if (!byTechGroup[t.group]) byTechGroup[t.group] = {}
+      const tg = byTechGroup[t.group]
+      if (!tg[t.techName]) tg[t.techName] = { sum: 0, count: 0 }
+      tg[t.techName].sum   += t.resolveMs
+      tg[t.techName].count += 1
+    }
   }
 
   const sort = (obj) => Object.fromEntries(Object.entries(obj).sort(([a], [b]) => a.localeCompare(b)))
+  const toMTTRAvg = (raw) => Object.fromEntries(
+    Object.entries(raw).sort(([a], [b]) => a.localeCompare(b)).map(([period, bySla]) => [
+      period,
+      Object.fromEntries(
+        Object.entries(bySla).map(([name, v]) => [name,
+          v.count > 0 ? +(v.sum / v.count / 3600000).toFixed(1) : null
+        ])
+      ),
+    ])
+  )
+  const toTTOAvg = (raw) => Object.fromEntries(
+    Object.entries(raw).sort(([a], [b]) => a.localeCompare(b)).map(([period, bySla]) => [
+      period,
+      Object.fromEntries(
+        Object.entries(bySla).map(([name, v]) => [name,
+          v.count > 0 ? +(v.sum / v.count / 3600000).toFixed(1) : null
+        ])
+      ),
+    ])
+  )
+
   return {
     byStatus,
     byPriority,
@@ -369,8 +474,30 @@ function computeChartMetrics(tickets) {
     byMonthCompliance:  sort(byMonthCompliance),
     byWeekNoTTO:        sort(byWeekNoTTO),
     byMonthNoTTO:       sort(byMonthNoTTO),
+    byWeekTTO:          toTTOAvg(byWeekTTO),
+    byMonthTTO:         toTTOAvg(byMonthTTO),
+    ttoSlaGroups: [...ttoSlaGroups.entries()].map(([name, g]) => ({
+      name,
+      targetH: g.targetH ?? (g.minSlaTTOMs != null ? +(g.minSlaTTOMs / 3600000).toFixed(1) : null),
+    })),
+    byWeekMTTR:         toMTTRAvg(byWeekMTTR),
+    byMonthMTTR:        toMTTRAvg(byMonthMTTR),
+    mttrSlaGroups: [...mttrSlaGroups.entries()].map(([name, g]) => ({
+      name,
+      targetH: g.targetH ?? (g.minSlaTTRMs != null ? +(g.minSlaTTRMs / 3600000).toFixed(1) : null),
+    })),
     byGroupCompliance,
     topEntities: Object.entries(byEntity).sort(([, a], [, b]) => b - a).slice(0, 10),
+    techGroups: Object.entries(byTechGroup)
+      .map(([group, techs]) => {
+        const techList = Object.entries(techs)
+          .map(([name, v]) => ({ name, avgDays: +(v.sum / v.count / 86400000).toFixed(2), count: v.count }))
+          .sort((a, b) => b.avgDays - a.avgDays)
+        const groupSum   = Object.values(techs).reduce((s, v) => s + v.sum, 0)
+        const groupCount = Object.values(techs).reduce((s, v) => s + v.count, 0)
+        return { group, avgDays: +(groupSum / groupCount / 86400000).toFixed(2), count: groupCount, techs: techList }
+      })
+      .sort((a, b) => b.avgDays - a.avgDays),
   }
 }
 
@@ -469,6 +596,34 @@ const groupComplianceData = computed(() =>
     .sort((a, b) => b.compliant + b.nonCompliant - (a.compliant + a.nonCompliant))
 )
 
+const mttrChartData = computed(() => {
+  const byMTTR  = period.value === 'week' ? timeChartMetrics.value.byWeekMTTR  : timeChartMetrics.value.byMonthMTTR
+  const labels  = Object.keys(period.value === 'week' ? timeChartMetrics.value.byWeek : timeChartMetrics.value.byMonth)
+  const groups  = timeChartMetrics.value.mttrSlaGroups ?? []
+  return {
+    labels,
+    datasets: groups.map(g => ({
+      name:    g.name,
+      targetH: g.targetH,
+      data:    labels.map(p => byMTTR[p]?.[g.name] ?? null),
+    })),
+  }
+})
+
+const ttoChartData = computed(() => {
+  const byTTO  = period.value === 'week' ? timeChartMetrics.value.byWeekTTO  : timeChartMetrics.value.byMonthTTO
+  const labels = Object.keys(period.value === 'week' ? timeChartMetrics.value.byWeek : timeChartMetrics.value.byMonth)
+  const groups = timeChartMetrics.value.ttoSlaGroups ?? []
+  return {
+    labels,
+    datasets: groups.map(g => ({
+      name:    g.name,
+      targetH: g.targetH,
+      data:    labels.map(p => byTTO[p]?.[g.name] ?? null),
+    })),
+  }
+})
+
 // ── Chart props and events ────────────────────────────────────────────────────
 const chartProps = computed(() => ({
   status: { title: 'By Status',   items: statusItems.value },
@@ -479,12 +634,14 @@ const chartProps = computed(() => ({
     data:              periodData.value,
     theme:             theme.value,
     highlightedPeriods: activeFilters.periods,
+    height:            heightFor('line'),
   },
   compliance: {
     title:             period.value === 'week' ? 'SLA compliance by week' : 'SLA compliance by month',
     weekData:          periodCompliance.value,
     theme:             theme.value,
     highlightedPeriods: activeFilters.periods,
+    height:            heightFor('compliance'),
   },
   noTTO: {
     title:             'Tickets not taken into account',
@@ -493,15 +650,36 @@ const chartProps = computed(() => ({
     color:             'rgba(245,158,11,0.8)',
     theme:             theme.value,
     highlightedPeriods: activeFilters.periods,
+    height:            heightFor('noTTO'),
+  },
+  tto: {
+    title:  period.value === 'week' ? 'Avg. TTO by SLA type — weekly' : 'Avg. TTO by SLA type — monthly',
+    ...ttoChartData.value,
+    theme:  theme.value,
+    height: heightFor('tto'),
+  },
+  mttr: {
+    title:             period.value === 'week' ? 'MTTR by SLA type — weekly' : 'MTTR by SLA type — monthly',
+    ...mttrChartData.value,
+    theme:             theme.value,
+    highlightedPeriods: activeFilters.periods,
+    height:            heightFor('mttr'),
   },
   group: {
     title:  'SLA compliance by group',
     groups: groupComplianceData.value,
     theme:  theme.value,
+    height: heightFor('group'),
   },
   entities: {
     title: 'Top 10 entities',
     items: chartMetrics.value.topEntities,
+    theme: theme.value,
+    height: heightFor('entities'),
+  },
+  techTime: {
+    title: 'Avg. handling time per technician',
+    groups: chartMetrics.value.techGroups ?? [],
     theme: theme.value,
   },
 }))
@@ -514,6 +692,9 @@ const chartEvents = computed(() => ({
   line:       { 'item-click': (label) => toggleFilter('periods',   label) },
   compliance: { 'item-click': (label) => toggleFilter('periods',   label) },
   noTTO:      { 'item-click': (label) => toggleFilter('periods',   label) },
+  tto:        { 'item-click': (label) => toggleFilter('periods',   label) },
+  mttr:       { 'item-click': (label) => toggleFilter('periods',   label) },
+  techTime:   {},
 }))
 
 // ── PowerPoint export ─────────────────────────────────────────────────────────
@@ -527,8 +708,11 @@ function getChartTitle(id) {
     line:       `Tickets opened by ${period.value}`,
     compliance: `SLA compliance by ${period.value}`,
     noTTO:      'Tickets not taken into account',
+    tto:        'Avg. time to first response',
+    mttr:       'MTTR — avg. resolution time',
     group:      'SLA compliance by group',
     entities:   'Top 10 entities',
+    techTime:   'Avg. handling time per technician',
   }[id] ?? id
 }
 
@@ -552,10 +736,6 @@ function runExport() {
 
 async function exportToPptx(ids) {
   exporting.value = true
-
-  // Temporarily hide reorder handles so they don't appear in captures
-  const wasReordering = reorderMode.value
-  reorderMode.value = false
   await nextTick()
 
   try {
@@ -599,34 +779,44 @@ async function exportToPptx(ids) {
 
     // ── One slide per chart ──────────────────────────────────────────────────
     const slideW = 13.33, slideH = 7.5
-    const margin = 0.35
+    const SCALE = 3
+
+    // html-to-image captures canvas elements at their native pixel size then
+    // upscales — blurry. Fix: swap each canvas for a pre-scaled copy, capture,
+    // then restore.
+    async function captureEl(el) {
+      const restored = []
+      for (const canvas of el.querySelectorAll('canvas')) {
+        const hd = document.createElement('canvas')
+        hd.width  = canvas.offsetWidth  * SCALE
+        hd.height = canvas.offsetHeight * SCALE
+        hd.style.cssText = canvas.style.cssText
+        hd.getContext('2d').drawImage(canvas, 0, 0, hd.width, hd.height)
+        canvas.replaceWith(hd)
+        restored.push({ hd, canvas })
+      }
+      const png = await toPng(el, { pixelRatio: SCALE, skipFonts: true })
+      for (const { hd, canvas } of restored) hd.replaceWith(canvas)
+      return png
+    }
 
     for (let i = 0; i < ids.length; i++) {
       const id = ids[i]
       const el = chartRefs[id]
       if (!el) continue
 
-      const png = await toPng(el, { pixelRatio: 2, skipFonts: true })
+      const png = await captureEl(el)
 
-      // Compute fitted dimensions keeping aspect ratio
       const { width: px, height: py } = el.getBoundingClientRect()
-      const maxW = slideW - margin * 2
-      const maxH = slideH - margin * 2
-      let w = maxW
+      let w = slideW
       let h = w * (py / px)
-      if (h > maxH) { h = maxH; w = h * (px / py) }
+      if (h > slideH) { h = slideH; w = h * (px / py) }
       const x = (slideW - w) / 2
       const y = (slideH - h) / 2
 
       const slide = pptx.addSlide()
       slide.background = { fill: bgFill }
       slide.addImage({ data: png, x, y, w, h })
-
-      // Slide number (bottom-right)
-      slide.addText(`${i + 1} / ${ids.length}`, {
-        x: slideW - 1.2, y: slideH - 0.35, w: 1.1, h: 0.28,
-        fontSize: 9, color: muted, align: 'right',
-      })
     }
 
     const date = new Date().toISOString().slice(0, 10)
@@ -634,13 +824,64 @@ async function exportToPptx(ids) {
   } catch (e) {
     console.error('PPT export failed:', e)
   } finally {
-    reorderMode.value      = wasReordering
     exporting.value        = false
     showExportDialog.value = false
   }
 }
 
+// ── Chart resize ──────────────────────────────────────────────────────────────
+function heightFor(id) {
+  const saved = chartSizes.value[id]?.height
+  return saved !== undefined ? saved : DEFAULT_HEIGHTS[id]
+}
+
+function startResize(e, id) {
+  const clientX = e.touches ? e.touches[0].clientX : e.clientX
+  const clientY = e.touches ? e.touches[0].clientY : e.clientY
+  const el = chartRefs[id]
+  let currentH = chartSizes.value[id]?.height ?? DEFAULT_HEIGHTS[id]
+  if (currentH == null) {
+    const wrap = el?.querySelector('.canvas-wrap')
+    currentH = wrap ? wrap.offsetHeight : 200
+  }
+  resizeState.id = id
+  resizeState.startX = clientX
+  resizeState.startY = clientY
+  resizeState.startW = chartSizes.value[id]?.width ?? el?.offsetWidth ?? 400
+  resizeState.startH = currentH
+}
+
+function onResizeMove(e) {
+  if (!resizeState.id) return
+  if (e.cancelable) e.preventDefault()
+  const clientX = e.touches ? e.touches[0].clientX : e.clientX
+  const clientY = e.touches ? e.touches[0].clientY : e.clientY
+  const newW = Math.min(Math.max(resizeState.startW + (clientX - resizeState.startX), 280), 2000)
+  const newH = Math.min(Math.max(resizeState.startH + (clientY - resizeState.startY), 150), 1000)
+  if (!chartSizes.value[resizeState.id]) chartSizes.value[resizeState.id] = {}
+  chartSizes.value[resizeState.id].width = newW
+  chartSizes.value[resizeState.id].height = newH
+}
+
+function onResizeEnd() {
+  resizeState.id = null
+}
+
 // ── Data loading ─────────────────────────────────────────────────────────────
+async function loadSatisfaction(force = false) {
+  if (satisfactionLoading.value) return
+  if (!force && satisfactionRecords.value.length > 0) return
+  satisfactionLoading.value = true
+  satisfactionError.value   = null
+  try {
+    satisfactionRecords.value = await fetchSatisfaction()
+  } catch (e) {
+    satisfactionError.value = e.message
+  } finally {
+    satisfactionLoading.value = false
+  }
+}
+
 async function load() {
   loading.value = true
   error.value   = null
@@ -656,7 +897,20 @@ async function load() {
   }
 }
 
-onMounted(load)
+onMounted(() => {
+  load()
+  document.addEventListener('mousemove', onResizeMove)
+  document.addEventListener('mouseup', onResizeEnd)
+  document.addEventListener('touchmove', onResizeMove, { passive: false })
+  document.addEventListener('touchend', onResizeEnd)
+})
+
+onUnmounted(() => {
+  document.removeEventListener('mousemove', onResizeMove)
+  document.removeEventListener('mouseup', onResizeEnd)
+  document.removeEventListener('touchmove', onResizeMove)
+  document.removeEventListener('touchend', onResizeEnd)
+})
 </script>
 
 <style>
@@ -798,8 +1052,12 @@ body {
 /* Stat cards */
 .stat-row { display: flex; gap: 20px; flex-wrap: wrap; }
 
-.card-wrapper,
-.chart-wrapper { position: relative; }
+.card-wrapper { position: relative; }
+.chart-wrapper {
+  position: relative;
+  flex: 1 1 calc(50% - 10px);
+  min-width: 280px;
+}
 
 .card-clickable { cursor: pointer; }
 .card-clickable:hover { box-shadow: 0 0 0 1px var(--accent); border-radius: 10px; }
@@ -867,50 +1125,70 @@ body {
   font-weight: 600;
 }
 
-/* Charts grid */
+/* Charts */
 .charts-row {
-  display: grid;
-  grid-template-columns: repeat(2, 1fr);
+  display: flex;
+  flex-wrap: wrap;
   gap: 20px;
 }
 
 /* Drag & drop */
 .card-drag-handle {
   position: absolute;
-  top: 6px;
-  right: 6px;
+  top: 4px;
+  left: 50%;
+  transform: translateX(-50%);
   z-index: 20;
   background: var(--border);
   border: none;
   border-radius: 4px;
   color: var(--text-muted);
-  font-size: 13px;
+  font-size: 12px;
   line-height: 1;
-  padding: 3px 6px;
+  padding: 2px 6px;
   cursor: grab;
   user-select: none;
+  opacity: 0;
+  transition: opacity 0.15s;
 }
 .card-drag-handle:active { cursor: grabbing; }
+.card-wrapper:hover .card-drag-handle { opacity: 1; }
 
 .drag-handle {
   position: absolute;
-  top: 10px;
-  left: 10px;
+  top: 6px;
+  left: 50%;
+  transform: translateX(-50%);
   z-index: 20;
   background: var(--border);
   border: none;
   border-radius: 4px;
   color: var(--text-muted);
-  font-size: 16px;
+  font-size: 14px;
   line-height: 1;
-  padding: 4px 8px;
+  padding: 3px 8px;
   cursor: grab;
   user-select: none;
+  opacity: 0;
+  transition: opacity 0.15s;
 }
 .drag-handle:active { cursor: grabbing; }
+.chart-wrapper:hover .drag-handle { opacity: 1; }
 
-.reorder-mode .card-wrapper { outline: 2px dashed var(--border); border-radius: 10px; }
-.reorder-mode .chart-wrapper { outline: 2px dashed var(--border); border-radius: 10px; }
+.resize-handle {
+  position: absolute;
+  bottom: 6px;
+  right: 6px;
+  width: 14px;
+  height: 14px;
+  cursor: nwse-resize;
+  opacity: 0.4;
+  background-image: radial-gradient(circle, var(--text-muted) 1.5px, transparent 1.5px);
+  background-size: 5px 5px;
+  transition: opacity 0.2s;
+}
+.resize-handle:hover { opacity: 1; }
+
 .card-ghost,
 .chart-ghost { opacity: 0.3; }
 

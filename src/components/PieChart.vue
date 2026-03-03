@@ -1,7 +1,7 @@
 <template>
   <div class="chart-card">
     <h3 class="chart-title">{{ title }}</h3>
-    <div class="canvas-wrap">
+    <div class="canvas-wrap" :style="{ height: height + 'px' }">
       <canvas ref="canvas" />
     </div>
   </div>
@@ -22,6 +22,7 @@ const props = defineProps({
   // Array of [label, count] pairs
   items: Array,
   theme: { type: String, default: 'dark' },
+  height: { type: Number, default: 260 },
 })
 const emit = defineEmits(['item-click'])
 
@@ -111,6 +112,5 @@ onUnmounted(() => {
   letter-spacing: 0.05em;
 }
 .canvas-wrap {
-  height: 260px;
 }
 </style>

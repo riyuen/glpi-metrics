@@ -64,6 +64,15 @@ let _groupMap = null
 let _groupMapExp = 0
 let _entityNames = null
 let _entityNamesExp = 0
+let _userNames = null
+let _userNamesExp = 0
+let _slaMap = null
+let _slaMapExp = 0
+let _techMap = null        // { ticketId → techName }
+let _techUserIdMap = null  // { ticketId → userId }
+let _techMapExp = 0
+let _groupMembership = null  // { userId → Set<groupName> }
+let _groupMembershipExp = 0
 
 const PAGE_SIZE = 1000
 const TICKET_FIELDS = 'is_deleted=0'
@@ -180,6 +189,70 @@ async function getCachedGroupMap(sessionToken) {
   return _groupMap
 }
 
+async function getCachedUserNames(sessionToken) {
+  if (_userNames && Date.now() < _userNamesExp) return _userNames
+  const users = await fetchAll(sessionToken, 'User')
+  _userNames = Object.fromEntries(
+    users.map(u => [u.id, [u.firstname, u.realname].filter(Boolean).join(' ') || u.name])
+  )
+  _userNamesExp = Date.now() + STATIC_TTL
+  return _userNames
+}
+
+// Returns { id → { name, targetH } } for all SLAs.
+// resolution_time is stored in seconds in GLPI.
+async function getCachedSlaMap(sessionToken) {
+  if (_slaMap && Date.now() < _slaMapExp) return _slaMap
+  const slas = await fetchAll(sessionToken, 'SLA')
+  _slaMap = Object.fromEntries(
+    slas.map(s => {
+      const secs = Number(s.resolution_time)
+      return [s.id, { name: s.name, targetH: secs > 0 ? +(secs / 3600).toFixed(1) : null }]
+    })
+  )
+  _slaMapExp = Date.now() + STATIC_TTL
+  return _slaMap
+}
+
+// Returns { techMap: { ticketId → techName }, techUserIdMap: { ticketId → userId } }
+async function getCachedTechData(sessionToken) {
+  if (_techMap && Date.now() < _techMapExp) return { techMap: _techMap, techUserIdMap: _techUserIdMap }
+  const [ticketUsers, userNames] = await Promise.all([
+    fetchAll(sessionToken, 'Ticket_User'),
+    getCachedUserNames(sessionToken),
+  ])
+  _techMap = {}
+  _techUserIdMap = {}
+  for (const tu of ticketUsers) {
+    if (Number(tu.type) === 2 && !_techMap[tu.tickets_id]) {
+      _techMap[tu.tickets_id] = userNames[tu.users_id] ?? `User ${tu.users_id}`
+      _techUserIdMap[tu.tickets_id] = tu.users_id
+    }
+  }
+  _techMapExp = Date.now() + STATIC_TTL
+  return { techMap: _techMap, techUserIdMap: _techUserIdMap }
+}
+
+// Returns { userId → Set<groupName> } from Group_User membership records.
+async function getCachedGroupMembership(sessionToken) {
+  if (_groupMembership && Date.now() < _groupMembershipExp) return _groupMembership
+  const [groups, groupUsers] = await Promise.all([
+    fetchAll(sessionToken, 'Group'),
+    fetchAll(sessionToken, 'Group_User'),
+  ])
+  const cleanName = (name) => name.replace(/^G_SEC_USR_TAUTURU_/i, '')
+  const groupNames = Object.fromEntries(groups.map(g => [g.id, cleanName(g.name)]))
+  _groupMembership = {}
+  for (const gu of groupUsers) {
+    const gName = groupNames[gu.groups_id]
+    if (!gName) continue
+    if (!_groupMembership[gu.users_id]) _groupMembership[gu.users_id] = new Set()
+    _groupMembership[gu.users_id].add(gName)
+  }
+  _groupMembershipExp = Date.now() + STATIC_TTL
+  return _groupMembership
+}
+
 async function getCachedEntityNames(sessionToken) {
   if (_entityNames && Date.now() < _entityNamesExp) return _entityNames
   _entityNames = await fetchAll(sessionToken, 'Entity').then((list) =>
@@ -189,16 +262,75 @@ async function getCachedEntityNames(sessionToken) {
   return _entityNames
 }
 
+export async function fetchSatisfaction() {
+  for (let attempt = 0; attempt < 2; attempt++) {
+    try {
+      const sessionToken = await getSession()
+
+      const [satisfactions, ticketUsers, groupMap, userNames, { techMap, techUserIdMap }, groupMembership] = await Promise.all([
+        fetchAll(sessionToken, 'TicketSatisfaction'),
+        fetchAll(sessionToken, 'Ticket_User'),
+        getCachedGroupMap(sessionToken),
+        getCachedUserNames(sessionToken),
+        getCachedTechData(sessionToken),
+        getCachedGroupMembership(sessionToken),
+      ])
+
+      // Build requester map (type 1) from the fresh Ticket_User fetch
+      const requesterMap = {}
+      for (const tu of ticketUsers) {
+        if (Number(tu.type) === 1 && !requesterMap[tu.tickets_id]) {
+          requesterMap[tu.tickets_id] = userNames[tu.users_id] ?? `User ${tu.users_id}`
+        }
+      }
+
+      return satisfactions
+        .filter(s => s.date_answered && Number(s.satisfaction) > 0)
+        .map(s => {
+          const group = groupMap[s.tickets_id] ?? 'Unassigned'
+          const uid   = techUserIdMap[s.tickets_id]
+          const technician = uid != null && groupMembership[uid]?.has(group)
+            ? (techMap[s.tickets_id] ?? '—')
+            : '—'
+          return {
+            ticketId:  s.tickets_id,
+            score:     Number(s.satisfaction),
+            comment:   (s.comment ?? '').trim(),
+            date:      s.date_answered,
+            group,
+            technician,
+            requester: requesterMap[s.tickets_id] ?? '—',
+          }
+        })
+        .sort((a, b) => (b.date ?? '').localeCompare(a.date ?? ''))
+    } catch (err) {
+      if (attempt === 0 && (err.message?.includes('401') || err.message?.includes('403'))) {
+        invalidateSession()
+        _groupMap        = null
+        _userNames       = null
+        _techMap         = null
+        _techUserIdMap   = null
+        _groupMembership = null
+        continue
+      }
+      throw err
+    }
+  }
+}
+
 export async function fetchMetrics() {
   // Retry once if the cached session has expired server-side (401/403)
   for (let attempt = 0; attempt < 2; attempt++) {
     try {
       const sessionToken = await getSession()
 
-      const [tickets, groupMap, entityNames] = await Promise.all([
+      const [tickets, groupMap, entityNames, slaMap, { techMap, techUserIdMap }, groupMembership] = await Promise.all([
         fetchAllTickets(sessionToken),
         getCachedGroupMap(sessionToken),
         getCachedEntityNames(sessionToken),
+        getCachedSlaMap(sessionToken),
+        getCachedTechData(sessionToken),
+        getCachedGroupMembership(sessionToken),
       ])
 
       const byStatus = {}
@@ -261,6 +393,21 @@ export async function fetchMetrics() {
           ? new Date(ticket.solvedate) - new Date(date)
           : null
 
+        const rawActualTTOMs = ticket.takeintoaccountdate && date
+          ? new Date(ticket.takeintoaccountdate) - new Date(date)
+          : null
+        const rawSlaTTOMs = ticket.time_to_own && date
+          ? new Date(ticket.time_to_own) - new Date(date)
+          : null
+        const rawSlaTTRMs = ticket.time_to_resolve && date
+          ? new Date(ticket.time_to_resolve) - new Date(date)
+          : null
+
+        const ttrSlaId = Number(ticket.slas_id_ttr)
+        const ttrSla   = ttrSlaId > 0 ? slaMap[ttrSlaId] : undefined
+        const ttoSlaId = Number(ticket.slas_id_tto)
+        const ttoSla   = ttoSlaId > 0 ? slaMap[ttoSlaId] : undefined
+
         processedTickets.push({
           id,
           name,
@@ -273,7 +420,18 @@ export async function fetchMetrics() {
           entity,
           breached,
           hasNoTTO: !ticket.takeintoaccountdate,
-          resolveMs: rawResolveMs > 0 ? rawResolveMs : null,
+          resolveMs:    rawResolveMs    > 0 ? rawResolveMs    : null,
+          actualTTOMs:   rawActualTTOMs  > 0 ? rawActualTTOMs  : null,
+          slaTTOMs:      rawSlaTTOMs     > 0 ? rawSlaTTOMs     : null,
+          slaTTRMs:      rawSlaTTRMs     > 0 ? rawSlaTTRMs     : null,
+          slaTTRName:    ttrSla?.name    ?? null,
+          slaTTRTargetH: ttrSla?.targetH ?? null,
+          ttoSlaName:    ttoSla?.name    ?? null,
+          ttoSlaTargetH: ttoSla?.targetH ?? null,
+          techName: (() => {
+            const uid = techUserIdMap[id]
+            return uid != null && groupMembership[uid]?.has(group) ? techMap[id] : null
+          })(),
         })
       }
 
@@ -304,8 +462,12 @@ export async function fetchMetrics() {
       // If session was rejected by the server, invalidate and retry once
       if (attempt === 0 && err.message?.includes('401') || err.message?.includes('403')) {
         invalidateSession()
-        _groupMap = null
-        _entityNames = null
+        _groupMap        = null
+        _entityNames     = null
+        _slaMap          = null
+        _techMap         = null
+        _techUserIdMap   = null
+        _groupMembership = null
         continue
       }
       throw err
