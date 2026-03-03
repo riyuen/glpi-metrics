@@ -66,8 +66,7 @@ let _entityNames = null
 let _entityNamesExp = 0
 
 const PAGE_SIZE = 1000
-// fields: 1=id, 2=name, 10=priority, 12=status, 15=opening date
-const TICKET_FIELDS = 'forcedisplay[0]=1&forcedisplay[1]=2&forcedisplay[2]=12&forcedisplay[3]=10&forcedisplay[4]=15'
+const TICKET_FIELDS = 'is_deleted=0'
 
 // Returns true if the ticket has breached its TTO or TTR SLA.
 // A ticket with no SLA deadlines at all is considered compliant.
@@ -245,7 +244,7 @@ export async function fetchMetrics() {
           if (breached) { byWeekCompliance[week].nonCompliant++; byMonthCompliance[month].nonCompliant++ }
           else { byWeekCompliance[week].compliant++; byMonthCompliance[month].compliant++ }
 
-          if (!ticket.begin_waiting_date) {
+          if (!ticket.takeintoaccountdate) {
             byWeekNoTTO[week] = (byWeekNoTTO[week] ?? 0) + 1
             byMonthNoTTO[month] = (byMonthNoTTO[month] ?? 0) + 1
           }
@@ -273,7 +272,7 @@ export async function fetchMetrics() {
           group,
           entity,
           breached,
-          hasNoTTO: !ticket.begin_waiting_date,
+          hasNoTTO: !ticket.takeintoaccountdate,
           resolveMs: rawResolveMs > 0 ? rawResolveMs : null,
         })
       }
