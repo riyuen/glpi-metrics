@@ -4,14 +4,14 @@
       <h3 class="chart-title">{{ title }}</h3>
       <div class="filter-wrap">
         <button class="filter-btn" @click="dropdownOpen = !dropdownOpen">
-          Groups
+          Groupes
           <span class="filter-count">{{ selected.length }}/{{ groups.length }}</span>
           <span class="caret">{{ dropdownOpen ? '▲' : '▼' }}</span>
         </button>
         <div v-if="dropdownOpen" class="dropdown">
           <div class="dropdown-header">
             <button class="select-all-btn" @click="toggleAll">
-              {{ allSelected ? 'Deselect all' : 'Select all' }}
+              {{ allSelected ? 'Tout désélectionner' : 'Tout sélectionner' }}
             </button>
           </div>
           <label v-for="g in groups" :key="g.group" class="dropdown-item">
@@ -22,7 +22,7 @@
       </div>
     </div>
 
-    <div v-if="!filteredGroups.length" class="empty">No data</div>
+    <div v-if="!filteredGroups.length" class="empty">Aucune donnée</div>
 
     <div v-else class="rows">
       <template v-for="g in filteredGroups" :key="g.group">
@@ -130,7 +130,10 @@ function pct(val) {
   border: 1px solid var(--border);
   border-radius: 10px;
   padding: 20px 24px;
-  width: 100%;
+  box-sizing: border-box;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
 }
 
 .chart-header {
@@ -138,6 +141,7 @@ function pct(val) {
   align-items: center;
   justify-content: space-between;
   margin-bottom: 16px;
+  flex-shrink: 0;
 }
 
 .chart-title {
@@ -238,8 +242,9 @@ function pct(val) {
   display: flex;
   flex-direction: column;
   gap: 0;
-  max-height: 400px;
+  flex: 1;
   overflow-y: auto;
+  min-height: 0;
   scrollbar-width: thin;
   scrollbar-color: var(--border) transparent;
 }

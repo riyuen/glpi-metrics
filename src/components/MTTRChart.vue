@@ -1,7 +1,13 @@
 <template>
   <div class="line-chart-card">
-    <h3 class="chart-title">{{ title }}</h3>
-    <div class="canvas-wrap" :style="{ height: height + 'px' }">
+    <div class="chart-header">
+      <h3 class="chart-title">{{ title }}</h3>
+      <div class="unit-toggle">
+        <button :class="{ active: unit === 'hours' }" @click="unit = 'hours'">Heures</button>
+        <button :class="{ active: unit === 'days'  }" @click="unit = 'days'">Jours</button>
+      </div>
+    </div>
+    <div class="canvas-wrap">
       <canvas ref="canvas" />
     </div>
   </div>
@@ -21,7 +27,6 @@ const props = defineProps({
   datasets: { type: Array, default: () => [] },
   theme: { type: String, default: 'dark' },
   highlightedPeriods: { type: Array, default: () => [] },
-  height: { type: Number, default: 220 },
 })
 const emit = defineEmits(['item-click'])
 
@@ -31,9 +36,13 @@ const C = computed(() => props.theme === 'light'
 )
 
 const canvas = ref(null)
+const unit = ref('days')
 
-const toD = (h) => h != null ? +(h / 24).toFixed(2) : null
-const fmtD = (d) => d != null ? d + 'd' : '—'
+const toU = (h) => {
+  if (h == null) return null
+  return unit.value === 'hours' ? +h.toFixed(1) : +(h / 24).toFixed(2)
+}
+const fmtU = (v) => v != null ? v + (unit.value === 'hours' ? 'h' : 'j') : '—'
 
 const targetLabelPlugin = {
   id: 'mttrTargetLabels',
@@ -50,7 +59,7 @@ const targetLabelPlugin = {
       ctx.font = 'bold 10px sans-serif'
       ctx.textAlign = 'right'
       ctx.textBaseline = 'bottom'
-      ctx.fillText(fmtD(val), chartArea.right - 4, yPx - 2)
+      ctx.fillText(fmtU(val), chartArea.right - 4, yPx - 2)
       ctx.restore()
     })
   },
@@ -69,12 +78,12 @@ function buildChart() {
   props.datasets.forEach((group, i) => {
     const color = PALETTE[i % PALETTE.length]
 
-    const targetD = toD(group.targetH)
+    const targetD = toU(group.targetH)
 
     const actualIdx = chartDatasets.length
     chartDatasets.push({
       label: group.name,
-      data: group.data.map(toD),
+      data: group.data.map(toU),
       borderColor: color,
       backgroundColor: 'transparent',
       borderWidth: 2,
@@ -91,7 +100,7 @@ function buildChart() {
     if (targetD != null) {
       targetIdx = chartDatasets.length
       chartDatasets.push({
-        label: `${group.name} target (${fmtD(targetD)})`,
+        label: `${group.name} target (${fmtU(targetD)})`,
         data: Array(props.labels.length).fill(targetD),
         borderColor: color,
         borderDash: [6, 3],
@@ -135,19 +144,13 @@ function buildChart() {
               Chart.defaults.plugins.legend.labels.generateLabels(chart)
                 .filter(lbl => !chart.data.datasets[lbl.datasetIndex]?._isTarget),
           },
-          // Clicking an SLA type in the legend toggles both its actual line and target together
           onClick: (e, legendItem, legend) => {
             const ci = legend.chart
             const clicked = pairs.find(p => p.actual === legendItem.datasetIndex)
             if (!clicked) return
-            // If this group is already the only visible one, restore all; otherwise isolate it
-            const alreadyIsolated = ci.isDatasetVisible(clicked.actual) &&
-              pairs.every(p => p.actual === clicked.actual || !ci.isDatasetVisible(p.actual))
-            pairs.forEach(p => {
-              const visible = alreadyIsolated || p.actual === clicked.actual
-              ci[visible ? 'show' : 'hide'](p.actual)
-              if (p.target != null) ci[visible ? 'show' : 'hide'](p.target)
-            })
+            const visible = ci.isDatasetVisible(clicked.actual)
+            ci[visible ? 'hide' : 'show'](clicked.actual)
+            if (clicked.target != null) ci[visible ? 'hide' : 'show'](clicked.target)
           },
         },
         tooltip: {
@@ -157,7 +160,7 @@ function buildChart() {
               if (val == null) return null
               return item.dataset._isTarget
                 ? ` ${item.dataset.label}`
-                : ` ${item.dataset.label}: ${fmtD(val)}`
+                : ` ${item.dataset.label}: ${fmtU(val)}`
             },
           },
         },
@@ -171,7 +174,7 @@ function buildChart() {
           beginAtZero: true,
           ticks: {
             color: C.value.tick,
-            callback: (v) => fmtD(v),
+            callback: (v) => fmtU(v),
           },
           grid: { color: C.value.grid },
         },
@@ -182,7 +185,7 @@ function buildChart() {
 
 onMounted(() => {
   watch(
-    [() => props.labels, () => props.datasets, () => props.theme, () => props.highlightedPeriods],
+    [() => props.labels, () => props.datasets, () => props.theme, () => props.highlightedPeriods, unit],
     buildChart,
     { deep: true, immediate: true }
   )
@@ -199,16 +202,51 @@ onUnmounted(() => {
   border: 1px solid var(--border);
   border-radius: 10px;
   padding: 20px 24px;
-  width: 100%;
+  box-sizing: border-box;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+.chart-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 16px;
+  flex-shrink: 0;
 }
 .chart-title {
-  margin: 0 0 16px;
+  margin: 0;
   font-size: 0.95rem;
   font-weight: 600;
   color: var(--text-muted);
   text-transform: uppercase;
   letter-spacing: 0.05em;
 }
+.unit-toggle {
+  display: flex;
+  gap: 2px;
+  background: var(--border);
+  border-radius: 6px;
+  padding: 2px;
+}
+.unit-toggle button {
+  background: none;
+  border: none;
+  border-radius: 4px;
+  color: var(--text-muted);
+  font-size: 0.75rem;
+  padding: 3px 10px;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.unit-toggle button.active {
+  background: var(--card-bg);
+  color: var(--text);
+  font-weight: 600;
+}
 .canvas-wrap {
+  flex: 1;
+  min-height: 0;
+  position: relative;
 }
 </style>

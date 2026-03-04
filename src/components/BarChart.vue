@@ -45,7 +45,10 @@ function pct(count) {
   border: 1px solid var(--border);
   border-radius: 10px;
   padding: 24px;
-  width: 100%;
+  box-sizing: border-box;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
 }
 .chart-title {
   margin: 0 0 20px;
@@ -54,10 +57,12 @@ function pct(count) {
   color: var(--text-muted);
   text-transform: uppercase;
   letter-spacing: 0.05em;
+  flex-shrink: 0;
 }
 .bars {
-  max-height: 400px;
+  flex: 1;
   overflow-y: auto;
+  min-height: 0;
   scrollbar-width: thin;
   scrollbar-color: var(--border) transparent;
 }

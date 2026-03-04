@@ -10,22 +10,22 @@ export const GLPI_URL = (import.meta.env.VITE_GLPI_URL ?? '').replace(/\/$/, '')
 
 // GLPI ticket status codes
 export const STATUS = {
-  1: 'New',
-  2: 'Assigned',
-  3: 'Planned',
-  4: 'Pending',
-  5: 'Solved',
-  6: 'Closed',
+  1: 'Nouveau',
+  2: 'En cours',
+  3: 'Planifié',
+  4: 'En attente',
+  5: 'Résolu',
+  6: 'Clôturé',
 }
 
 // GLPI priority codes
 export const PRIORITY = {
-  1: 'Very Low',
-  2: 'Low',
-  3: 'Medium',
-  4: 'High',
-  5: 'Very High',
-  6: 'Major',
+  1: 'Très faible',
+  2: 'Faible',
+  3: 'Moyen',
+  4: 'Élevé',
+  5: 'Très élevé',
+  6: 'Majeur',
 }
 
 // --- Session cache (reused across refreshes, invalidated on 401/403) ---

@@ -1,7 +1,7 @@
 <template>
   <div class="chart-card">
     <h3 class="chart-title">{{ title }}</h3>
-    <div class="canvas-wrap" :style="{ height: height + 'px' }">
+    <div class="canvas-wrap">
       <canvas ref="canvas" />
     </div>
   </div>
@@ -22,7 +22,6 @@ const props = defineProps({
   // Array of [label, count] pairs
   items: Array,
   theme: { type: String, default: 'dark' },
-  height: { type: Number, default: 260 },
 })
 const emit = defineEmits(['item-click'])
 
@@ -101,7 +100,10 @@ onUnmounted(() => {
   border: 1px solid var(--border);
   border-radius: 10px;
   padding: 20px 24px;
-  width: 100%;
+  box-sizing: border-box;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
 }
 .chart-title {
   margin: 0 0 16px;
@@ -110,7 +112,11 @@ onUnmounted(() => {
   color: var(--text-muted);
   text-transform: uppercase;
   letter-spacing: 0.05em;
+  flex-shrink: 0;
 }
 .canvas-wrap {
+  flex: 1;
+  min-height: 0;
+  position: relative;
 }
 </style>

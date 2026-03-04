@@ -4,20 +4,20 @@
       <div class="header-left">
         <h1>GLPI Metrics</h1>
         <nav class="app-nav">
-          <button class="nav-btn" :class="{ active: currentView === 'dashboard' }" @click="currentView = 'dashboard'">Dashboard</button>
-          <button class="nav-btn" :class="{ active: currentView === 'tickets' }" @click="currentView = 'tickets'">Tickets by Group</button>
+          <button class="nav-btn" :class="{ active: currentView === 'dashboard' }" @click="currentView = 'dashboard'">Tableau de bord</button>
+          <button class="nav-btn" :class="{ active: currentView === 'tickets' }" @click="currentView = 'tickets'">Tickets par groupe</button>
           <button class="nav-btn" :class="{ active: currentView === 'satisfaction' }" @click="currentView = 'satisfaction'; loadSatisfaction()">Satisfaction</button>
         </nav>
       </div>
       <div class="header-actions">
         <button class="theme-btn" @click="theme = theme === 'dark' ? 'light' : 'dark'">
-          {{ theme === 'dark' ? 'Light mode' : 'Dark mode' }}
+          {{ theme === 'dark' ? 'Mode clair' : 'Mode sombre' }}
         </button>
         <template v-if="currentView === 'dashboard'">
-          <button class="export-btn" :disabled="loading" @click="openExportDialog">Export PPT</button>
+          <button class="export-btn" :disabled="loading" @click="openExportDialog">Exporter PPT</button>
         </template>
         <button class="refresh-btn" :disabled="loading" @click="load">
-          {{ loading ? 'Loading…' : 'Refresh' }}
+          {{ loading ? 'Chargement…' : 'Actualiser' }}
         </button>
       </div>
     </header>
@@ -38,6 +38,7 @@
 
     <main v-else-if="!error && currentView === 'dashboard'" class="content">
       <!-- Summary stat cards -->
+      <div ref="statRowRef">
       <draggable
         v-model="cardOrder"
         :item-key="id => id"
@@ -55,46 +56,47 @@
             }"
             @click="handleCardClick(id)"
           >
-            <button class="card-drag-handle" title="Drag to reorder">⠿</button>
+            <button class="card-drag-handle" title="Glisser pour réordonner">⠿</button>
             <StatCard :label="cardData[id].label" :value="cardData[id].value" />
           </div>
         </template>
       </draggable>
+      </div>
 
       <!-- Active filter bar -->
       <div v-if="hasActiveFilters" class="filter-bar">
-        <span class="filter-label">Filters:</span>
+        <span class="filter-label">Filtres :</span>
         <span v-if="activeFilters.statuses.length" class="filter-chip">
-          Status: {{ activeFilters.statuses.map(s => STATUS[s]).join(', ') }}
+          Statut : {{ activeFilters.statuses.map(s => STATUS[s]).join(', ') }}
           <button @click.stop="activeFilters.statuses.length = 0">×</button>
         </span>
         <span v-if="activeFilters.priorities.length" class="filter-chip">
-          Priority: {{ activeFilters.priorities.map(p => PRIORITY[p]).join(', ') }}
+          Priorité : {{ activeFilters.priorities.map(p => PRIORITY[p]).join(', ') }}
           <button @click.stop="activeFilters.priorities.length = 0">×</button>
         </span>
         <span v-if="activeFilters.groups.length" class="filter-chip">
-          Group: {{ activeFilters.groups.join(', ') }}
+          Groupe : {{ activeFilters.groups.join(', ') }}
           <button @click.stop="activeFilters.groups.length = 0">×</button>
         </span>
         <span v-if="activeFilters.entities.length" class="filter-chip">
-          Entity: {{ activeFilters.entities.join(', ') }}
+          Entité : {{ activeFilters.entities.join(', ') }}
           <button @click.stop="activeFilters.entities.length = 0">×</button>
         </span>
         <span v-if="activeFilters.periods.length" class="filter-chip">
-          {{ period === 'week' ? 'Week' : 'Month' }}: {{ activeFilters.periods.join(', ') }}
+          {{ period === 'week' ? 'Semaine' : 'Mois' }} : {{ activeFilters.periods.join(', ') }}
           <button @click.stop="activeFilters.periods.length = 0">×</button>
         </span>
         <span v-if="activeFilters.compliance" class="filter-chip">
-          {{ activeFilters.compliance === 'compliant' ? 'Compliant only' : 'Non-compliant only' }}
+          {{ activeFilters.compliance === 'compliant' ? 'Conformes seulement' : 'Non conformes seulement' }}
           <button @click.stop="activeFilters.compliance = null">×</button>
         </span>
-        <button class="clear-all-btn" @click="clearFilters">Clear all</button>
+        <button class="clear-all-btn" @click="clearFilters">Tout effacer</button>
       </div>
 
       <!-- Period toggle -->
       <div class="period-toggle">
-        <button :class="{ active: period === 'week' }" @click="period = 'week'">Weekly</button>
-        <button :class="{ active: period === 'month' }" @click="period = 'month'">Monthly</button>
+        <button :class="{ active: period === 'week' }" @click="period = 'week'">Hebdomadaire</button>
+        <button :class="{ active: period === 'month' }" @click="period = 'month'">Mensuel</button>
       </div>
 
       <!-- Charts -->
@@ -110,12 +112,12 @@
           <div
             class="chart-wrapper"
             :style="{
-              width: chartSizes[id]?.width != null ? chartSizes[id].width + 'px' : undefined,
-              flex:  chartSizes[id]?.width != null ? '0 0 auto' : undefined,
+              gridColumn: `span ${spanFor(id).col}`,
+              gridRow:    `span ${spanFor(id).row}`,
             }"
             :ref="el => { if (el) chartRefs[id] = el; else delete chartRefs[id] }"
           >
-            <button class="drag-handle" title="Drag to reorder">⠿</button>
+            <button class="drag-handle" title="Glisser pour réordonner">⠿</button>
             <component :is="COMP[id]" v-bind="chartProps[id]" v-on="chartEvents[id]" />
             <div
               class="resize-handle"
@@ -128,38 +130,44 @@
     </main>
 
     <footer class="app-footer">
-      <span v-if="lastUpdated">Last updated: {{ lastUpdated }}</span>
+      <span v-if="lastUpdated">Dernière mise à jour : {{ lastUpdated }}</span>
     </footer>
 
     <!-- Export PPT dialog -->
     <div v-if="showExportDialog" class="dialog-overlay" @click.self="showExportDialog = false">
       <div class="dialog">
-        <h3 class="dialog-title">Select charts to export</h3>
+        <h3 class="dialog-title">Exporter en PowerPoint</h3>
 
-        <div class="dialog-select-all">
-          <button class="select-toggle-btn" @click="toggleAllExport">
-            {{ selectedCharts.length === chartOrder.length ? 'Deselect all' : 'Select all' }}
-          </button>
-          <span class="dialog-count">{{ selectedCharts.length }} / {{ chartOrder.length }} selected</span>
+        <!-- Stat cards row -->
+        <div class="export-section-label">Cartes de statistiques</div>
+        <div class="export-row">
+          <input type="checkbox" v-model="exportStatCards" class="export-checkbox" />
+          <input type="text" v-model="exportStatTitle" class="export-title-input" :disabled="!exportStatCards" placeholder="Titre de la diapositive" />
         </div>
 
+        <!-- Charts -->
+        <div class="export-section-label" style="margin-top:14px">
+          Graphiques
+          <button class="select-toggle-btn" @click="toggleAllExport">
+            {{ selectedCharts.length === chartOrder.length ? 'Tout désélectionner' : 'Tout sélectionner' }}
+          </button>
+        </div>
         <ul class="export-chart-list">
-          <li v-for="id in chartOrder" :key="id" class="export-chart-item">
-            <label>
-              <input type="checkbox" :value="id" v-model="selectedCharts" />
-              <span>{{ getChartTitle(id) }}</span>
-            </label>
+          <li v-for="id in chartOrder" :key="id" class="export-row">
+            <input type="checkbox" :value="id" v-model="selectedCharts" class="export-checkbox" />
+            <input type="text" v-model="exportTitles[id]" class="export-title-input" :disabled="!selectedCharts.includes(id)" placeholder="Titre de la diapositive" />
           </li>
         </ul>
 
         <div class="dialog-footer">
-          <button class="outline-btn" @click="showExportDialog = false">Cancel</button>
+          <span class="dialog-count">{{ exportSlideCount }} diapositive{{ exportSlideCount === 1 ? '' : 's' }}</span>
+          <button class="outline-btn" @click="showExportDialog = false">Annuler</button>
           <button
             class="refresh-btn"
-            :disabled="selectedCharts.length === 0 || exporting"
+            :disabled="exportSlideCount === 0 || exporting"
             @click="runExport"
           >
-            {{ exporting ? 'Exporting…' : `Export ${selectedCharts.length} slide${selectedCharts.length === 1 ? '' : 's'}` }}
+            {{ exporting ? 'Exportation…' : 'Exporter' }}
           </button>
         </div>
       </div>
@@ -221,8 +229,22 @@ const ALL_CARD_IDS = ['open', 'total', 'solved', 'compliance', 'compliant', 'non
 const CHART_ORDER_KEY  = 'glpi-chart-order'
 const CARD_ORDER_KEY   = 'glpi-card-order'
 const THEME_KEY        = 'glpi-theme'
-const CHART_SIZES_KEY  = 'glpi-chart-sizes'
-const DEFAULT_HEIGHTS  = { line: 220, compliance: 220, noTTO: 220, tto: 220, mttr: 220, entities: 260, group: null }
+const CHART_SPANS_KEY  = 'glpi-chart-spans'
+const GRID_COLS   = 12
+const GRID_ROW_H  = 60   // px per row track
+const GRID_GAP    = 20   // px gap between tracks
+const DEFAULT_SPANS = {
+  status:     { col: 6, row: 4 },
+  priority:   { col: 6, row: 4 },
+  line:       { col: 6, row: 4 },
+  compliance: { col: 6, row: 4 },
+  noTTO:      { col: 6, row: 4 },
+  tto:        { col: 6, row: 5 },
+  mttr:       { col: 6, row: 5 },
+  group:      { col: 6, row: 5 },
+  entities:   { col: 6, row: 5 },
+  techTime:   { col: 6, row: 5 },
+}
 
 function loadOrder(key, defaults) {
   try {
@@ -253,17 +275,20 @@ const lastUpdated = ref(null)
 const satisfactionRecords = ref([])
 const satisfactionLoading = ref(false)
 const satisfactionError   = ref(null)
-const exporting   = ref(false)
+const exporting        = ref(false)
+const statRowRef       = ref(null)
+const exportTitles     = ref({})
+const exportStatCards  = ref(true)
+const exportStatTitle  = ref('Key Metrics')
 const chartRefs   = {} // populated via :ref callbacks in the template
 const chartOrder  = ref(loadOrder(CHART_ORDER_KEY, ALL_IDS))
 const cardOrder   = ref(loadOrder(CARD_ORDER_KEY,  ALL_CARD_IDS))
 const theme       = ref(localStorage.getItem(THEME_KEY) ?? 'dark')
-const chartSizes  = ref(JSON.parse(localStorage.getItem(CHART_SIZES_KEY) ?? 'null') ?? {})
-const resizeState = reactive({ id: null, startX: 0, startY: 0, startW: 0, startH: 0 })
-
+const chartSizes  = ref(JSON.parse(localStorage.getItem(CHART_SPANS_KEY) ?? 'null') ?? {})
+const resizeState = reactive({ id: null, startX: 0, startY: 0, startCol: 0, startRow: 0, cellW: 0 })
 watch(chartOrder, (o) => localStorage.setItem(CHART_ORDER_KEY, JSON.stringify(o)), { deep: true })
 watch(cardOrder,  (o) => localStorage.setItem(CARD_ORDER_KEY,  JSON.stringify(o)), { deep: true })
-watch(chartSizes, (s) => localStorage.setItem(CHART_SIZES_KEY, JSON.stringify(s)), { deep: true })
+watch(chartSizes, (s) => localStorage.setItem(CHART_SPANS_KEY, JSON.stringify(s)), { deep: true })
 watch(theme, (t) => {
   document.documentElement.classList.toggle('light', t === 'light')
   localStorage.setItem(THEME_KEY, t)
@@ -536,13 +561,13 @@ const cardData = computed(() => {
   const s = filteredStats.value
   const v = (x) => loading.value ? '—' : x
   return {
-    open:         { label: 'Open Tickets',    value: v(s.open),                                  clickable: true,  active: cardActive.value.open },
-    total:        { label: 'Total Tickets',   value: v(s.total),                                 clickable: false, active: false },
-    solved:       { label: 'Closed / Solved', value: v(s.solved),                                clickable: true,  active: cardActive.value.solved },
-    compliance:   { label: 'SLA Compliance',  value: v(s.pct),                                   clickable: false, active: false },
-    compliant:    { label: 'Compliant',        value: v(s.compliant),                             clickable: true,  active: cardActive.value.compliant },
-    nonCompliant: { label: 'Non-Compliant',    value: v(s.nonCompliant),                          clickable: true,  active: cardActive.value.nonCompliant },
-    avgResolve:   { label: 'Avg. Resolve',     value: v(s.avgH === null ? '—' : `${s.avgH}h`),   clickable: false, active: false },
+    open:         { label: 'Tickets ouverts',  value: v(s.open),                                  clickable: true,  active: cardActive.value.open },
+    total:        { label: 'Total tickets',    value: v(s.total),                                 clickable: false, active: false },
+    solved:       { label: 'Clôturés / Résolus', value: v(s.solved),                             clickable: true,  active: cardActive.value.solved },
+    compliance:   { label: 'Conformité SLA',   value: v(s.pct),                                   clickable: false, active: false },
+    compliant:    { label: 'Conformes',         value: v(s.compliant),                             clickable: true,  active: cardActive.value.compliant },
+    nonCompliant: { label: 'Non conformes',     value: v(s.nonCompliant),                          clickable: true,  active: cardActive.value.nonCompliant },
+    avgResolve:   { label: 'Rés. moyenne',      value: v(s.avgH === null ? '—' : `${s.avgH}h`),   clickable: false, active: false },
   }
 })
 
@@ -626,59 +651,52 @@ const ttoChartData = computed(() => {
 
 // ── Chart props and events ────────────────────────────────────────────────────
 const chartProps = computed(() => ({
-  status: { title: 'By Status',   items: statusItems.value },
-  priority: { title: 'By Priority', items: priorityItems.value },
+  status: { title: 'Par statut',   items: statusItems.value },
+  priority: { title: 'Par priorité', items: priorityItems.value },
   line: {
-    title:             period.value === 'week' ? 'Tickets opened by week' : 'Tickets opened by month',
+    title:             period.value === 'week' ? 'Tickets ouverts par semaine' : 'Tickets ouverts par mois',
     labels:            periodLabels.value,
     data:              periodData.value,
     theme:             theme.value,
     highlightedPeriods: activeFilters.periods,
-    height:            heightFor('line'),
   },
   compliance: {
-    title:             period.value === 'week' ? 'SLA compliance by week' : 'SLA compliance by month',
+    title:             period.value === 'week' ? 'Conformité SLA par semaine' : 'Conformité SLA par mois',
     weekData:          periodCompliance.value,
     theme:             theme.value,
     highlightedPeriods: activeFilters.periods,
-    height:            heightFor('compliance'),
   },
   noTTO: {
-    title:             'Tickets not taken into account',
+    title:             'Tickets non pris en compte',
     labels:            periodNoTTOLabels.value,
     data:              periodNoTTOData.value,
     color:             'rgba(245,158,11,0.8)',
     theme:             theme.value,
     highlightedPeriods: activeFilters.periods,
-    height:            heightFor('noTTO'),
   },
   tto: {
-    title:  period.value === 'week' ? 'Avg. TTO by SLA type — weekly' : 'Avg. TTO by SLA type — monthly',
+    title:  period.value === 'week' ? 'TTO moy. par type SLA — hebdo.' : 'TTO moy. par type SLA — mensuel',
     ...ttoChartData.value,
     theme:  theme.value,
-    height: heightFor('tto'),
   },
   mttr: {
-    title:             period.value === 'week' ? 'MTTR by SLA type — weekly' : 'MTTR by SLA type — monthly',
+    title:             period.value === 'week' ? 'MTTR par type SLA — hebdo.' : 'MTTR par type SLA — mensuel',
     ...mttrChartData.value,
     theme:             theme.value,
     highlightedPeriods: activeFilters.periods,
-    height:            heightFor('mttr'),
   },
   group: {
-    title:  'SLA compliance by group',
+    title:  'Conformité SLA par groupe',
     groups: groupComplianceData.value,
     theme:  theme.value,
-    height: heightFor('group'),
   },
   entities: {
-    title: 'Top 10 entities',
+    title: 'Top 10 entités',
     items: chartMetrics.value.topEntities,
     theme: theme.value,
-    height: heightFor('entities'),
   },
   techTime: {
-    title: 'Avg. handling time per technician',
+    title: 'Temps de traitement moy. par technicien',
     groups: chartMetrics.value.techGroups ?? [],
     theme: theme.value,
   },
@@ -700,25 +718,30 @@ const chartEvents = computed(() => ({
 // ── PowerPoint export ─────────────────────────────────────────────────────────
 const showExportDialog = ref(false)
 const selectedCharts   = ref([...ALL_IDS])
+const exportSlideCount = computed(() => selectedCharts.value.length + (exportStatCards.value ? 1 : 0))
 
 function getChartTitle(id) {
   return {
-    status:     'By Status',
-    priority:   'By Priority',
-    line:       `Tickets opened by ${period.value}`,
-    compliance: `SLA compliance by ${period.value}`,
-    noTTO:      'Tickets not taken into account',
-    tto:        'Avg. time to first response',
-    mttr:       'MTTR — avg. resolution time',
-    group:      'SLA compliance by group',
-    entities:   'Top 10 entities',
-    techTime:   'Avg. handling time per technician',
+    status:     'Par statut',
+    priority:   'Par priorité',
+    line:       `Tickets ouverts par ${period.value === 'week' ? 'semaine' : 'mois'}`,
+    compliance: `Conformité SLA par ${period.value === 'week' ? 'semaine' : 'mois'}`,
+    noTTO:      'Tickets non pris en compte',
+    tto:        'TTO moy. par type SLA',
+    mttr:       'MTTR — temps de résolution moy.',
+    group:      'Conformité SLA par groupe',
+    entities:   'Top 10 entités',
+    techTime:   'Temps de traitement moy. par technicien',
   }[id] ?? id
 }
 
 function openExportDialog() {
-  // Reset to current chart order, all selected
   selectedCharts.value = [...chartOrder.value]
+  const titles = {}
+  for (const id of ALL_IDS) titles[id] = getChartTitle(id)
+  exportTitles.value = titles
+  exportStatCards.value = true
+  exportStatTitle.value = 'Key Metrics'
   showExportDialog.value = true
 }
 
@@ -729,12 +752,11 @@ function toggleAllExport() {
 }
 
 function runExport() {
-  // Export in the same order the user has charts laid out, keeping only selected ones
   const ordered = chartOrder.value.filter(id => selectedCharts.value.includes(id))
-  exportToPptx(ordered)
+  exportToPptx(ordered, exportStatCards.value, exportStatTitle.value, exportTitles.value)
 }
 
-async function exportToPptx(ids) {
+async function exportToPptx(ids, includeStats, statsTitle, titles) {
   exporting.value = true
   await nextTick()
 
@@ -749,6 +771,7 @@ async function exportToPptx(ids) {
     const bgFill  = isDark ? '0f172a' : 'f1f5f9'
     const accent  = isDark ? '38bdf8' : '0284c7'
     const muted   = isDark ? '94a3b8' : '64748b'
+    const textClr = isDark ? 'f1f5f9' : '1e293b'
 
     // ── Title slide ──────────────────────────────────────────────────────────
     const titleSlide = pptx.addSlide()
@@ -763,13 +786,13 @@ async function exportToPptx(ids) {
     })
     if (hasActiveFilters.value) {
       const parts = []
-      if (activeFilters.statuses.length)   parts.push(`Status: ${activeFilters.statuses.map(s => STATUS[s]).join(', ')}`)
-      if (activeFilters.priorities.length) parts.push(`Priority: ${activeFilters.priorities.map(p => PRIORITY[p]).join(', ')}`)
-      if (activeFilters.groups.length)     parts.push(`Group: ${activeFilters.groups.join(', ')}`)
-      if (activeFilters.entities.length)   parts.push(`Entity: ${activeFilters.entities.join(', ')}`)
-      if (activeFilters.periods.length)    parts.push(`${period.value === 'week' ? 'Week' : 'Month'}: ${activeFilters.periods.join(', ')}`)
-      if (activeFilters.compliance)        parts.push(activeFilters.compliance === 'compliant' ? 'Compliant only' : 'Non-compliant only')
-      titleSlide.addText(`Filtered by: ${parts.join('  •  ')}`, {
+      if (activeFilters.statuses.length)   parts.push(`Statut : ${activeFilters.statuses.map(s => STATUS[s]).join(', ')}`)
+      if (activeFilters.priorities.length) parts.push(`Priorité : ${activeFilters.priorities.map(p => PRIORITY[p]).join(', ')}`)
+      if (activeFilters.groups.length)     parts.push(`Groupe : ${activeFilters.groups.join(', ')}`)
+      if (activeFilters.entities.length)   parts.push(`Entité : ${activeFilters.entities.join(', ')}`)
+      if (activeFilters.periods.length)    parts.push(`${period.value === 'week' ? 'Semaine' : 'Mois'} : ${activeFilters.periods.join(', ')}`)
+      if (activeFilters.compliance)        parts.push(activeFilters.compliance === 'compliant' ? 'Conformes seulement' : 'Non conformes seulement')
+      titleSlide.addText(`Filtré par : ${parts.join('  •  ')}`, {
         x: 0.5, y: 4.55, w: 12.33, h: 0.45,
         fontSize: 12, color: accent, align: 'center',
         border: { type: 'solid', color: accent, pt: 1 },
@@ -777,13 +800,11 @@ async function exportToPptx(ids) {
       })
     }
 
-    // ── One slide per chart ──────────────────────────────────────────────────
+    // ── Helpers ───────────────────────────────────────────────────────────────
     const slideW = 13.33, slideH = 7.5
+    const TITLE_H = 0.55
     const SCALE = 3
 
-    // html-to-image captures canvas elements at their native pixel size then
-    // upscales — blurry. Fix: swap each canvas for a pre-scaled copy, capture,
-    // then restore.
     async function captureEl(el) {
       const restored = []
       for (const canvas of el.querySelectorAll('canvas')) {
@@ -800,22 +821,47 @@ async function exportToPptx(ids) {
       return png
     }
 
-    for (let i = 0; i < ids.length; i++) {
-      const id = ids[i]
+    function addSlideWithTitle(title) {
+      const slide = pptx.addSlide()
+      slide.background = { fill: bgFill }
+      if (title) {
+        slide.addText(title, {
+          x: 0.4, y: 0.12, w: slideW - 0.8, h: TITLE_H,
+          fontSize: 18, bold: true, color: textClr,
+        })
+      }
+      return slide
+    }
+
+    function fitImage(px, py, reservedH) {
+      const maxH = slideH - reservedH
+      let w = slideW
+      let h = w * (py / px)
+      if (h > maxH) { h = maxH; w = h * (px / py) }
+      const x = (slideW - w) / 2
+      const y = reservedH + (maxH - h) / 2
+      return { x, y, w, h }
+    }
+
+    // ── Stat cards slide ──────────────────────────────────────────────────────
+    if (includeStats && statRowRef.value) {
+      const png = await captureEl(statRowRef.value)
+      const { width: px, height: py } = statRowRef.value.getBoundingClientRect()
+      const slide = addSlideWithTitle(statsTitle)
+      const { x, y, w, h } = fitImage(px, py, statsTitle ? TITLE_H + 0.1 : 0)
+      slide.addImage({ data: png, x, y, w, h })
+    }
+
+    // ── One slide per chart ───────────────────────────────────────────────────
+    for (const id of ids) {
       const el = chartRefs[id]
       if (!el) continue
 
       const png = await captureEl(el)
-
       const { width: px, height: py } = el.getBoundingClientRect()
-      let w = slideW
-      let h = w * (py / px)
-      if (h > slideH) { h = slideH; w = h * (px / py) }
-      const x = (slideW - w) / 2
-      const y = (slideH - h) / 2
-
-      const slide = pptx.addSlide()
-      slide.background = { fill: bgFill }
+      const slideTitle = titles?.[id] ?? ''
+      const slide = addSlideWithTitle(slideTitle)
+      const { x, y, w, h } = fitImage(px, py, slideTitle ? TITLE_H + 0.1 : 0)
       slide.addImage({ data: png, x, y, w, h })
     }
 
@@ -829,26 +875,25 @@ async function exportToPptx(ids) {
   }
 }
 
-// ── Chart resize ──────────────────────────────────────────────────────────────
-function heightFor(id) {
-  const saved = chartSizes.value[id]?.height
-  return saved !== undefined ? saved : DEFAULT_HEIGHTS[id]
+// ── Chart grid resize ─────────────────────────────────────────────────────────
+function spanFor(id) {
+  const saved = chartSizes.value[id]
+  return (saved?.col != null) ? saved : (DEFAULT_SPANS[id] ?? { col: 6, row: 4 })
 }
 
 function startResize(e, id) {
   const clientX = e.touches ? e.touches[0].clientX : e.clientX
   const clientY = e.touches ? e.touches[0].clientY : e.clientY
-  const el = chartRefs[id]
-  let currentH = chartSizes.value[id]?.height ?? DEFAULT_HEIGHTS[id]
-  if (currentH == null) {
-    const wrap = el?.querySelector('.canvas-wrap')
-    currentH = wrap ? wrap.offsetHeight : 200
-  }
+  const container = chartRefs[id]?.closest('.charts-row')
+  const containerW = container?.offsetWidth ?? (GRID_COLS * 80)
+  // step size = one column/row track including its trailing gap
+  const colStep = (containerW - GRID_GAP * (GRID_COLS - 1)) / GRID_COLS + GRID_GAP
   resizeState.id = id
   resizeState.startX = clientX
   resizeState.startY = clientY
-  resizeState.startW = chartSizes.value[id]?.width ?? el?.offsetWidth ?? 400
-  resizeState.startH = currentH
+  resizeState.startCol = spanFor(id).col
+  resizeState.startRow = spanFor(id).row
+  resizeState.cellW = colStep
 }
 
 function onResizeMove(e) {
@@ -856,11 +901,9 @@ function onResizeMove(e) {
   if (e.cancelable) e.preventDefault()
   const clientX = e.touches ? e.touches[0].clientX : e.clientX
   const clientY = e.touches ? e.touches[0].clientY : e.clientY
-  const newW = Math.min(Math.max(resizeState.startW + (clientX - resizeState.startX), 280), 2000)
-  const newH = Math.min(Math.max(resizeState.startH + (clientY - resizeState.startY), 150), 1000)
-  if (!chartSizes.value[resizeState.id]) chartSizes.value[resizeState.id] = {}
-  chartSizes.value[resizeState.id].width = newW
-  chartSizes.value[resizeState.id].height = newH
+  const newCol = Math.max(2, Math.min(GRID_COLS, Math.round(resizeState.startCol + (clientX - resizeState.startX) / resizeState.cellW)))
+  const newRow = Math.max(3, Math.min(20, Math.round(resizeState.startRow + (clientY - resizeState.startY) / (GRID_ROW_H + GRID_GAP))))
+  chartSizes.value[resizeState.id] = { col: newCol, row: newRow }
 }
 
 function onResizeEnd() {
@@ -1055,8 +1098,8 @@ body {
 .card-wrapper { position: relative; }
 .chart-wrapper {
   position: relative;
-  flex: 1 1 calc(50% - 10px);
-  min-width: 280px;
+  min-width: 0;
+  min-height: 0;
 }
 
 .card-clickable { cursor: pointer; }
@@ -1127,8 +1170,9 @@ body {
 
 /* Charts */
 .charts-row {
-  display: flex;
-  flex-wrap: wrap;
+  display: grid;
+  grid-template-columns: repeat(12, 1fr);
+  grid-auto-rows: 60px;
   gap: 20px;
 }
 
@@ -1175,6 +1219,7 @@ body {
 .drag-handle:active { cursor: grabbing; }
 .chart-wrapper:hover .drag-handle { opacity: 1; }
 
+
 .resize-handle {
   position: absolute;
   bottom: 6px;
@@ -1207,8 +1252,8 @@ body {
   border: 1px solid var(--border);
   border-radius: 12px;
   padding: 24px;
-  width: 340px;
-  max-width: 90vw;
+  width: 560px;
+  max-width: 92vw;
   box-shadow: 0 24px 64px rgba(0, 0, 0, 0.5);
 }
 .dialog-title {
@@ -1217,6 +1262,43 @@ body {
   color: var(--text);
   margin-bottom: 14px;
 }
+.export-section-label {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 0.78rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-muted);
+  margin-bottom: 6px;
+}
+.export-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 4px 0;
+}
+.export-checkbox {
+  accent-color: var(--accent);
+  width: 15px;
+  height: 15px;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+.export-title-input {
+  flex: 1;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--text);
+  font-size: 0.85rem;
+  padding: 5px 10px;
+  outline: none;
+  transition: border-color 0.15s;
+}
+.export-title-input:focus { border-color: var(--accent); }
+.export-title-input:disabled { opacity: 0.35; cursor: not-allowed; }
 .dialog-select-all {
   display: flex;
   align-items: center;
@@ -1245,26 +1327,6 @@ body {
   margin: 8px 0 4px;
   max-height: 320px;
   overflow-y: auto;
-}
-.export-chart-item label {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 7px 8px;
-  border-radius: 6px;
-  cursor: pointer;
-  font-size: 0.88rem;
-  color: var(--text);
-  user-select: none;
-  transition: background 0.1s;
-}
-.export-chart-item label:hover { background: rgba(255,255,255,0.05); }
-.export-chart-item input[type='checkbox'] {
-  accent-color: var(--accent);
-  width: 15px;
-  height: 15px;
-  cursor: pointer;
-  flex-shrink: 0;
 }
 .dialog-footer {
   display: flex;

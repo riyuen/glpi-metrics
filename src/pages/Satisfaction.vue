@@ -5,19 +5,19 @@
       <div class="header-left">
         <h2 class="page-title">Satisfaction</h2>
         <span v-if="!loading && !error" class="total-badge">
-          {{ selectedScores.length ? `${filteredRecords.length} of ${records.length}` : records.length }}
-          response{{ records.length === 1 ? '' : 's' }}
+          {{ selectedScores.length ? `${filteredRecords.length} sur ${records.length}` : records.length }}
+          réponse{{ records.length === 1 ? '' : 's' }}
         </span>
       </div>
       <button class="reload-btn" @click="$emit('refresh')" :disabled="loading">
-        {{ loading ? 'Loading…' : 'Refresh' }}
+        {{ loading ? 'Chargement…' : 'Actualiser' }}
       </button>
     </div>
 
     <!-- States -->
-    <div v-if="loading" class="empty-state">Loading satisfaction data…</div>
+    <div v-if="loading" class="empty-state">Chargement des données de satisfaction…</div>
     <div v-else-if="error" class="error-state">{{ error }}</div>
-    <div v-else-if="records.length === 0" class="empty-state">No satisfaction survey responses found.</div>
+    <div v-else-if="records.length === 0" class="empty-state">Aucune réponse au sondage de satisfaction trouvée.</div>
 
     <template v-else>
       <!-- Summary cards -->
@@ -27,30 +27,30 @@
             {{ avgScore.toFixed(1) }}<span class="stat-denom">/5</span>
           </div>
           <div class="stat-stars" :style="{ color: scoreColor(avgScore) }">{{ starsFor(avgScore) }}</div>
-          <div class="stat-label">Average score</div>
+          <div class="stat-label">Score moyen</div>
         </div>
         <div class="stat-card">
           <div class="stat-value">{{ filteredRecords.length }}</div>
-          <div class="stat-label">Survey responses</div>
+          <div class="stat-label">Réponses au sondage</div>
         </div>
         <div class="stat-card">
           <div class="stat-value">{{ commentsCount }}</div>
-          <div class="stat-label">With comments</div>
+          <div class="stat-label">Avec commentaires</div>
         </div>
         <div class="stat-card">
           <div class="stat-value">{{ groupStats.length }}</div>
-          <div class="stat-label">Groups</div>
+          <div class="stat-label">Groupes</div>
         </div>
       </div>
 
       <!-- Score filter -->
       <div class="score-filter">
-        <span class="filter-label">Score</span>
+        <span class="filter-label">Note</span>
         <button
           class="score-btn"
           :class="{ active: selectedScores.length === 0 }"
           @click="selectedScores = []"
-        >All</button>
+        >Tous</button>
         <button
           v-for="n in [1, 2, 3, 4, 5]"
           :key="n"
@@ -63,14 +63,14 @@
 
       <!-- By Group -->
       <section class="section-card">
-        <h3 class="section-title">By Group</h3>
+        <h3 class="section-title">Par groupe</h3>
         <table class="sat-table">
           <thead>
             <tr>
-              <th class="th-name">Group / Technician</th>
+              <th class="th-name">Groupe / Technicien</th>
               <th class="th-bar"></th>
-              <th class="th-score">Score</th>
-              <th class="th-count">Responses</th>
+              <th class="th-score">Note</th>
+              <th class="th-count">Réponses</th>
             </tr>
           </thead>
           <tbody>
@@ -114,15 +114,15 @@
       <!-- Comments -->
       <section class="section-card">
         <div class="section-head">
-          <h3 class="section-title">Comments</h3>
+          <h3 class="section-title">Commentaires</h3>
           <select class="group-select" v-model="commentGroupFilter">
-            <option value="">All groups</option>
+            <option value="">Tous les groupes</option>
             <option v-for="g in groupStats" :key="g.name" :value="g.name">{{ g.name }}</option>
           </select>
         </div>
 
         <div v-if="filteredComments.length === 0" class="empty-state small">
-          No comments for this selection.
+          Aucun commentaire pour cette sélection.
         </div>
         <div v-else class="comments-list">
           <div v-for="c in filteredComments" :key="c.ticketId" class="comment-card">

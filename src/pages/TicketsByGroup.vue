@@ -1,7 +1,7 @@
 <template>
   <div class="tickets-page" v-click-outside="() => (dropdownOpen = false)">
     <div class="page-header">
-      <h2 class="page-title">Tickets by Group</h2>
+      <h2 class="page-title">Tickets par groupe</h2>
       <span class="total-badge">{{ currentGroup ? currentGroup.tickets.length : 0 }} ticket{{ (currentGroup?.tickets.length ?? 0) === 1 ? '' : 's' }}</span>
     </div>
 
@@ -10,7 +10,7 @@
       <!-- Group dropdown -->
       <div class="dropdown-wrap">
         <button class="filter-btn" @click="dropdownOpen = !dropdownOpen">
-          <span class="filter-btn-label">Group</span>
+          <span class="filter-btn-label">Groupe</span>
           <span class="filter-btn-value">{{ selectedGroup ?? '—' }}</span>
           <span class="caret">{{ dropdownOpen ? '▲' : '▼' }}</span>
         </button>
@@ -30,12 +30,12 @@
 
       <!-- Status filter -->
       <div class="status-filter">
-        <span class="filter-label">Status</span>
+        <span class="filter-label">Statut</span>
         <button
           class="status-btn"
           :class="{ active: selectedStatuses.length === 0 }"
           @click="selectedStatuses = []"
-        >All</button>
+        >Tous</button>
         <button
           v-for="(label, code) in STATUS"
           :key="code"
@@ -48,17 +48,17 @@
     </div>
 
     <!-- No group selected / empty -->
-    <div v-if="!currentGroup" class="empty-state">No group selected.</div>
-    <div v-else-if="currentGroup.tickets.length === 0" class="empty-state">No tickets match the current filter.</div>
+    <div v-if="!currentGroup" class="empty-state">Aucun groupe sélectionné.</div>
+    <div v-else-if="currentGroup.tickets.length === 0" class="empty-state">Aucun ticket ne correspond au filtre actuel.</div>
 
     <!-- Group table -->
     <div v-else class="group-block">
       <div class="group-summary">
         <span class="group-compliance" :style="{ color: complianceColor(currentGroup.pct) }">
-          {{ currentGroup.pct }}% compliant
+          {{ currentGroup.pct }}% conformes
         </span>
         <span class="group-sep">•</span>
-        <span class="group-breach">{{ currentGroup.breachCount }} breached</span>
+        <span class="group-breach">{{ currentGroup.breachCount }} en infraction</span>
       </div>
 
       <div class="table-wrap">
@@ -66,15 +66,15 @@
           <thead>
             <tr>
               <th class="col-id">#</th>
-              <th class="col-name">Title</th>
-              <th class="col-status">Status</th>
-              <th class="col-priority">Priority</th>
+              <th class="col-name">Titre</th>
+              <th class="col-status">Statut</th>
+              <th class="col-priority">Priorité</th>
               <th class="col-date">Date</th>
               <th class="col-sla">SLA</th>
             </tr>
           </thead>
           <tbody>
-            <tr v-for="t in currentGroup.tickets" :key="t.id" class="ticket-row" @click="openTicket(t.id)" title="Open in GLPI">
+            <tr v-for="t in currentGroup.tickets" :key="t.id" class="ticket-row" @click="openTicket(t.id)" title="Ouvrir dans GLPI">
               <td class="col-id text-muted">{{ t.id }}</td>
               <td class="col-name">{{ t.name || '—' }}</td>
               <td class="col-status">

@@ -4,7 +4,7 @@
       <h3 class="chart-title">{{ title }}</h3>
       <div class="filter-wrap">
         <button class="filter-btn" @click="dropdownOpen = !dropdownOpen">
-          Groups
+          Groupes
           <span class="filter-count">{{ selected.length }}/{{ (groups ?? []).length }}</span>
           <span class="caret">{{ dropdownOpen ? '▲' : '▼' }}</span>
         </button>
@@ -12,7 +12,7 @@
         <div v-if="dropdownOpen" class="dropdown">
           <div class="dropdown-header">
             <button class="select-all-btn" @click="toggleAll">
-              {{ allSelected ? 'Deselect all' : 'Select all' }}
+              {{ allSelected ? 'Tout désélectionner' : 'Tout sélectionner' }}
             </button>
           </div>
           <label v-for="g in groups" :key="g.name" class="dropdown-item">
@@ -24,7 +24,7 @@
     </div>
 
     <div class="canvas-scroll">
-      <div class="canvas-wrap" :style="{ height: (height ?? Math.max(160, filtered.length * 44)) + 'px' }">
+      <div class="canvas-wrap" :style="{ height: Math.max(160, filtered.length * 44) + 'px' }">
         <canvas ref="canvas" />
       </div>
     </div>
@@ -40,7 +40,6 @@ const props = defineProps({
   title: String,
   groups: Array, // [{ name, compliant, nonCompliant }]
   theme: { type: String, default: 'dark' },
-  height: { type: Number, default: null },
 })
 const emit = defineEmits(['item-click'])
 
@@ -113,14 +112,14 @@ function buildChart() {
       labels: filtered.value.map((g) => g.name),
       datasets: [
         {
-          label: 'Compliant',
+          label: 'Conforme',
           data: filtered.value.map((g) => pct(g)[0]),
           counts: compliantCounts,
           backgroundColor: 'rgba(16,185,129,0.8)',
           borderRadius: 3,
         },
         {
-          label: 'Non-compliant',
+          label: 'Non conforme',
           data: filtered.value.map((g) => pct(g)[1]),
           counts: nonCompliantCounts,
           backgroundColor: 'rgba(239,68,68,0.8)',
@@ -147,7 +146,7 @@ function buildChart() {
           callbacks: {
             title: (items) => {
               const idx = items[0].dataIndex
-              return `${items[0].label}  (${totalCounts[idx]} tickets)`
+              return `${items[0].label}  (${totalCounts[idx]} ticket${totalCounts[idx] > 1 ? 's' : ''})`
             },
             label: (item) => {
               const count = item.dataset.counts[item.dataIndex]
@@ -196,8 +195,11 @@ onUnmounted(() => {
   border: 1px solid var(--border);
   border-radius: 10px;
   padding: 20px 24px;
-  width: 100%;
+  box-sizing: border-box;
+  height: 100%;
   position: relative;
+  display: flex;
+  flex-direction: column;
 }
 
 .chart-header {
@@ -205,6 +207,7 @@ onUnmounted(() => {
   align-items: center;
   justify-content: space-between;
   margin-bottom: 16px;
+  flex-shrink: 0;
 }
 
 .chart-title {
@@ -298,8 +301,9 @@ onUnmounted(() => {
 }
 
 .canvas-scroll {
-  max-height: 400px;
+  flex: 1;
   overflow-y: auto;
+  min-height: 0;
   scrollbar-width: thin;
   scrollbar-color: var(--border) transparent;
 }
