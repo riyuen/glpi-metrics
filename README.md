@@ -1,5 +1,76 @@
-# Vue 3 + Vite
+# GLPI Metrics
 
-This template should help get you started developing with Vue 3 in Vite. The template uses Vue 3 `<script setup>` SFCs, check out the [script setup docs](https://v3.vuejs.org/api/sfc-script-setup.html#sfc-script-setup) to learn more.
+A Vue 3 dashboard for visualising GLPI helpdesk metrics — SLA compliance, ticket volumes, satisfaction surveys, and more.
 
-Learn more about IDE Support for Vue in the [Vue Docs Scaling up Guide](https://vuejs.org/guide/scaling-up/tooling.html#ide-support).
+## Features
+
+- **Tableau de bord** (`/`) — stat cards, interactive charts, drag-and-drop layout, PowerPoint export
+- **Tickets par groupe** (`/tickets`) — per-group ticket list with status and SLA compliance
+- **Sans prise en charge** (`/unacknowledged`) — open tickets with no TTO older than 30 days
+- **Satisfaction** (`/satisfaction`) — satisfaction survey scores and comments by group
+
+Each tab is a distinct URL — bookmarkable and browser-history aware.
+
+## Prerequisites
+
+- Docker + Docker Compose
+- A running GLPI instance with REST API enabled
+- A GLPI app token and user token
+
+## Setup
+
+1. Copy the example environment file and fill in your values:
+
+```bash
+cp .env.example .env
+```
+
+| Variable | Description |
+|---|---|
+| `VITE_GLPI_URL` | Your GLPI instance URL, no trailing slash (e.g. `https://glpi.example.com`) |
+| `VITE_GLPI_APP_TOKEN` | GLPI REST API app token — create one in **Setup → General → API** |
+| `VITE_GLPI_USER_TOKEN` | GLPI user token — find it in your profile under **User token** |
+
+2. Build and start:
+
+```bash
+docker compose up -d --build
+```
+
+The app is served on **port 80**. Point your domain's DNS A record at the server and it will be accessible at `http://your-domain`.
+
+## Architecture
+
+```
+Browser → nginx (port 80)
+            ├── /           → Vue SPA (built static files)
+            ├── /api/       → pre-fetched JSON written by Airflow
+            └── /glpi-api/  → reverse proxy to GLPI REST API (avoids CORS)
+```
+
+The GLPI URL is injected at container start via `envsubst` — the built JS bundle does not contain it.
+
+## Development
+
+Node 18+ is required locally only for linting/IDE support. The production build always runs inside Docker.
+
+```bash
+npm install
+npm run dev    # Vite dev server on http://localhost:5173
+npm run build  # Production build → dist/
+```
+
+## Airflow (optional)
+
+A companion Airflow service pre-fetches and caches GLPI metrics as JSON under `~/glpi-metrics-data/`. This reduces load on the GLPI API and speeds up the dashboard. Configure DAGs in `airflow/dags/`.
+
+```bash
+docker compose up -d airflow
+# Airflow UI: http://server:8080
+```
+
+## Notes
+
+- **Corporate proxy / self-signed SSL**: the Dockerfile uses `npm ci --strict-ssl=false` for environments with SSL inspection. Remove that flag if not needed.
+- Chart order, card order, and sizes are persisted in `localStorage`.
+- Theme (dark/light) is also persisted in `localStorage`.
