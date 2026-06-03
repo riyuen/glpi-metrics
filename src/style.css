@@ -1,6 +1,6 @@
-@import "@govpf/ori-tokens/build/css/tokens.css";
-@import "@govpf/ori-tokens/src/dark.css";
-@import "@govpf/ori-css/dist/ori.css";
+@import "@govpf/ori-tokens/css";
+@import "@govpf/ori-tokens/dark";
+@import "@govpf/ori-css";
 
 * { box-sizing: border-box; margin: 0; padding: 0; }
 
