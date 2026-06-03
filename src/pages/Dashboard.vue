@@ -29,42 +29,42 @@
     <!-- Active filter bar -->
     <div v-if="hasActiveFilters" class="filter-bar">
       <span class="filter-label">Filtres :</span>
-      <span v-if="activeFilters.statuses.length" class="filter-chip">
+      <span v-if="activeFilters.statuses.length" class="ori-tag ori-tag--info">
         Statut : {{ activeFilters.statuses.map(s => STATUS[s]).join(', ') }}
-        <button @click.stop="activeFilters.statuses.length = 0">×</button>
+        <button class="ori-tag__remove" @click.stop="activeFilters.statuses.length = 0" aria-label="Retirer">×</button>
       </span>
-      <span v-if="activeFilters.priorities.length" class="filter-chip">
+      <span v-if="activeFilters.priorities.length" class="ori-tag ori-tag--info">
         Priorité : {{ activeFilters.priorities.map(p => PRIORITY[p]).join(', ') }}
-        <button @click.stop="activeFilters.priorities.length = 0">×</button>
+        <button class="ori-tag__remove" @click.stop="activeFilters.priorities.length = 0" aria-label="Retirer">×</button>
       </span>
-      <span v-if="activeFilters.groups.length" class="filter-chip">
+      <span v-if="activeFilters.groups.length" class="ori-tag ori-tag--info">
         Groupe : {{ activeFilters.groups.join(', ') }}
-        <button @click.stop="activeFilters.groups.length = 0">×</button>
+        <button class="ori-tag__remove" @click.stop="activeFilters.groups.length = 0" aria-label="Retirer">×</button>
       </span>
-      <span v-if="activeFilters.entities.length" class="filter-chip">
+      <span v-if="activeFilters.entities.length" class="ori-tag ori-tag--info">
         Entité : {{ activeFilters.entities.join(', ') }}
-        <button @click.stop="activeFilters.entities.length = 0">×</button>
+        <button class="ori-tag__remove" @click.stop="activeFilters.entities.length = 0" aria-label="Retirer">×</button>
       </span>
-      <span v-if="activeFilters.periods.length" class="filter-chip">
+      <span v-if="activeFilters.periods.length" class="ori-tag ori-tag--info">
         {{ period === 'week' ? 'Semaine' : 'Mois' }} : {{ activeFilters.periods.join(', ') }}
-        <button @click.stop="activeFilters.periods.length = 0">×</button>
+        <button class="ori-tag__remove" @click.stop="activeFilters.periods.length = 0" aria-label="Retirer">×</button>
       </span>
-      <span v-if="activeFilters.compliance" class="filter-chip">
+      <span v-if="activeFilters.compliance" class="ori-tag ori-tag--info">
         {{ activeFilters.compliance === 'compliant' ? 'Conformes seulement' : 'Non conformes seulement' }}
-        <button @click.stop="activeFilters.compliance = null">×</button>
+        <button class="ori-tag__remove" @click.stop="activeFilters.compliance = null" aria-label="Retirer">×</button>
       </span>
-      <button class="clear-all-btn" @click="clearFilters">Tout effacer</button>
+      <button class="ori-button ori-button--ghost ori-button--sm" @click="clearFilters">Tout effacer</button>
     </div>
 
     <!-- Period toggle -->
-    <div class="period-toggle">
-      <button :class="{ active: period === 'week' }" @click="period = 'week'">Hebdomadaire</button>
-      <button :class="{ active: period === 'month' }" @click="period = 'month'">Mensuel</button>
+    <div class="ori-tabs__list period-toggle">
+      <button class="ori-tabs__tab" :class="{ 'ori-tabs__tab--active': period === 'week' }" @click="period = 'week'">Hebdomadaire</button>
+      <button class="ori-tabs__tab" :class="{ 'ori-tabs__tab--active': period === 'month' }" @click="period = 'month'">Mensuel</button>
     </div>
 
     <!-- Export PPT button -->
     <div class="dashboard-actions">
-      <button class="export-btn" :disabled="loading" @click="openExportDialog">Exporter PPT</button>
+      <button class="ori-button ori-button--secondary ori-button--sm" :disabled="loading" @click="openExportDialog">Exporter PPT</button>
     </div>
 
     <!-- Charts -->
@@ -124,9 +124,9 @@
 
         <div class="dialog-footer">
           <span class="dialog-count">{{ exportSlideCount }} diapositive{{ exportSlideCount === 1 ? '' : 's' }}</span>
-          <button class="outline-btn" @click="showExportDialog = false">Annuler</button>
+          <button class="ori-button ori-button--ghost" @click="showExportDialog = false">Annuler</button>
           <button
-            class="refresh-btn"
+            class="ori-button ori-button--primary"
             :disabled="exportSlideCount === 0 || exporting"
             @click="runExport"
           >
@@ -895,25 +895,8 @@ onUnmounted(() => {
   justify-content: flex-end;
 }
 
-.export-btn {
-  background: none;
-  border: 1px solid var(--accent);
-  border-radius: 6px;
-  color: var(--accent);
-  font-size: 0.85rem;
-  font-weight: 600;
-  padding: 8px 14px;
-  cursor: pointer;
-  transition: background 0.2s, color 0.2s;
-}
-.export-btn:hover:not(:disabled) {
-  background: var(--accent);
-  color: #0f172a;
-}
-.export-btn:disabled { opacity: 0.5; cursor: not-allowed; }
-
 /* Stat cards */
-.stat-row { display: flex; gap: 20px; flex-wrap: wrap; }
+.stat-row { display: flex; gap: 16px; flex-wrap: wrap; }
 
 .card-wrapper { position: relative; }
 .chart-wrapper {
@@ -923,8 +906,8 @@ onUnmounted(() => {
 }
 
 .card-clickable { cursor: pointer; }
-.card-clickable:hover { box-shadow: 0 0 0 1px var(--accent); border-radius: 10px; }
-.card-active    { box-shadow: 0 0 0 2px var(--accent); border-radius: 10px; }
+.card-clickable:hover { box-shadow: 0 0 0 2px var(--color-brand-primary); border-radius: var(--radius-lg, 10px); }
+.card-active    { box-shadow: 0 0 0 2px var(--color-brand-primary); border-radius: var(--radius-lg, 10px); }
 
 /* Filter bar */
 .filter-bar {
@@ -933,59 +916,20 @@ onUnmounted(() => {
   flex-wrap: wrap;
   gap: 8px;
   padding: 10px 14px;
-  background: var(--card-bg);
-  border: 1px solid var(--accent);
-  border-radius: 8px;
-  font-size: 0.82rem;
+  background: var(--color-surface-muted);
+  border: 1px solid var(--color-brand-primary);
+  border-radius: var(--radius-md, 8px);
 }
-.filter-label { color: var(--text-muted); font-weight: 600; }
-.filter-chip {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  background: color-mix(in srgb, var(--accent) 15%, transparent);
-  border: 1px solid var(--accent);
-  border-radius: 4px;
-  padding: 2px 8px;
-  color: var(--accent);
+.filter-label {
+  color: var(--color-text-muted);
+  font-weight: var(--font-weight-semibold, 600);
+  font-size: var(--font-size-sm, 0.875rem);
 }
-.filter-chip button {
-  background: none;
-  border: none;
-  color: var(--accent);
-  cursor: pointer;
-  padding: 0;
-  font-size: 14px;
-  line-height: 1;
-}
-.clear-all-btn {
-  background: none;
-  border: 1px solid var(--text-muted);
-  border-radius: 4px;
-  color: var(--text-muted);
-  cursor: pointer;
-  font-size: 0.78rem;
-  padding: 2px 10px;
-  transition: all 0.15s;
-}
-.clear-all-btn:hover { border-color: var(--text); color: var(--text); }
 
-/* Period toggle */
-.period-toggle { display: flex; gap: 6px; }
-.period-toggle button {
-  background: none;
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  color: var(--text-muted);
-  font-size: 0.8rem;
-  padding: 5px 14px;
-  cursor: pointer;
-}
-.period-toggle button.active {
-  background: var(--accent);
-  border-color: var(--accent);
-  color: #0f172a;
-  font-weight: 600;
+/* Period toggle — slim override so ori-tabs__list sits flush */
+.period-toggle {
+  border-bottom: none;
+  gap: 4px;
 }
 
 /* Charts */
@@ -1005,8 +949,8 @@ onUnmounted(() => {
   z-index: 20;
   background: var(--border);
   border: none;
-  border-radius: 4px;
-  color: var(--text-muted);
+  border-radius: var(--radius-sm, 4px);
+  color: var(--color-text-muted);
   font-size: 12px;
   line-height: 1;
   padding: 2px 6px;
@@ -1026,8 +970,8 @@ onUnmounted(() => {
   z-index: 20;
   background: var(--border);
   border: none;
-  border-radius: 4px;
-  color: var(--text-muted);
+  border-radius: var(--radius-sm, 4px);
+  color: var(--color-text-muted);
   font-size: 14px;
   line-height: 1;
   padding: 3px 8px;
@@ -1047,7 +991,7 @@ onUnmounted(() => {
   height: 14px;
   cursor: nwse-resize;
   opacity: 0.4;
-  background-image: radial-gradient(circle, var(--text-muted) 1.5px, transparent 1.5px);
+  background-image: radial-gradient(circle, var(--color-text-muted) 1.5px, transparent 1.5px);
   background-size: 5px 5px;
   transition: opacity 0.2s;
 }
@@ -1067,29 +1011,29 @@ onUnmounted(() => {
   z-index: 200;
 }
 .dialog {
-  background: var(--card-bg);
-  border: 1px solid var(--border);
-  border-radius: 12px;
+  background: var(--color-surface-muted);
+  border: 1px solid var(--color-border-default);
+  border-radius: var(--radius-lg, 12px);
   padding: 24px;
   width: 560px;
   max-width: 92vw;
-  box-shadow: 0 24px 64px rgba(0, 0, 0, 0.5);
+  box-shadow: var(--shadow-xl);
 }
 .dialog-title {
-  font-size: 1rem;
-  font-weight: 700;
-  color: var(--text);
+  font-size: var(--font-size-md, 1rem);
+  font-weight: var(--font-weight-bold, 700);
+  color: var(--color-text-primary);
   margin-bottom: 14px;
 }
 .export-section-label {
   display: flex;
   align-items: center;
   gap: 10px;
-  font-size: 0.78rem;
-  font-weight: 600;
+  font-size: var(--font-size-xs, 0.75rem);
+  font-weight: var(--font-weight-semibold, 600);
   text-transform: uppercase;
   letter-spacing: 0.05em;
-  color: var(--text-muted);
+  color: var(--color-text-muted);
   margin-bottom: 6px;
 }
 .export-row {
@@ -1099,7 +1043,7 @@ onUnmounted(() => {
   padding: 4px 0;
 }
 .export-checkbox {
-  accent-color: var(--accent);
+  accent-color: var(--color-brand-primary);
   width: 15px;
   height: 15px;
   cursor: pointer;
@@ -1107,28 +1051,28 @@ onUnmounted(() => {
 }
 .export-title-input {
   flex: 1;
-  background: var(--bg);
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  color: var(--text);
-  font-size: 0.85rem;
+  background: var(--color-surface-base);
+  border: 1px solid var(--color-border-default);
+  border-radius: var(--radius-md, 6px);
+  color: var(--color-text-primary);
+  font-size: var(--font-size-sm, 0.875rem);
   padding: 5px 10px;
   outline: none;
   transition: border-color 0.15s;
 }
-.export-title-input:focus { border-color: var(--accent); }
+.export-title-input:focus { border-color: var(--color-border-focus); }
 .export-title-input:disabled { opacity: 0.35; cursor: not-allowed; }
 .select-toggle-btn {
   background: none;
   border: none;
-  color: var(--accent);
-  font-size: 0.8rem;
+  color: var(--color-brand-primary);
+  font-size: var(--font-size-sm, 0.875rem);
   cursor: pointer;
   padding: 0;
 }
 .dialog-count {
-  font-size: 0.78rem;
-  color: var(--text-muted);
+  font-size: var(--font-size-xs, 0.75rem);
+  color: var(--color-text-muted);
 }
 .export-chart-list {
   list-style: none;
@@ -1142,32 +1086,10 @@ onUnmounted(() => {
 .dialog-footer {
   display: flex;
   justify-content: flex-end;
+  align-items: center;
   gap: 10px;
   margin-top: 18px;
   padding-top: 16px;
-  border-top: 1px solid var(--border);
+  border-top: 1px solid var(--color-border-subtle);
 }
-.outline-btn {
-  background: none;
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  color: var(--text-muted);
-  font-size: 0.85rem;
-  font-weight: 600;
-  padding: 8px 14px;
-  cursor: pointer;
-  transition: border-color 0.2s, color 0.2s;
-}
-.refresh-btn {
-  background: var(--accent);
-  color: #0f172a;
-  border: none;
-  border-radius: 6px;
-  padding: 8px 18px;
-  font-size: 0.85rem;
-  font-weight: 600;
-  cursor: pointer;
-  transition: opacity 0.2s;
-}
-.refresh-btn:disabled { opacity: 0.5; cursor: not-allowed; }
 </style>

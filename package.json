@@ -9,6 +9,8 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@govpf/ori-css": "latest",
+    "@govpf/ori-tokens": "latest",
     "chart.js": "^4.5.1",
     "chartjs-plugin-datalabels": "^2.2.0",
     "html-to-image": "^1.11.13",

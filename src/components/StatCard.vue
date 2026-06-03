@@ -1,7 +1,9 @@
 <template>
-  <div class="stat-card">
-    <div class="stat-value">{{ value }}</div>
-    <div class="stat-label">{{ label }}</div>
+  <div class="ori-card stat-card">
+    <div class="ori-statistic">
+      <span class="ori-statistic__value stat-value">{{ value }}</span>
+      <span class="ori-statistic__label stat-label">{{ label }}</span>
+    </div>
   </div>
 </template>
 
@@ -14,24 +16,23 @@ defineProps({
 
 <style scoped>
 .stat-card {
-  background: var(--card-bg);
-  border: 1px solid var(--border);
-  border-radius: 10px;
-  padding: 24px 32px;
+  padding: 20px 28px;
   text-align: center;
   min-width: 140px;
 }
 .stat-value {
-  font-size: 3rem;
-  font-weight: 700;
+  font-size: 2.5rem;
+  font-weight: var(--font-weight-bold, 700);
   color: var(--accent);
   line-height: 1;
+  display: block;
 }
 .stat-label {
-  margin-top: 8px;
-  font-size: 0.85rem;
-  color: var(--text-muted);
+  margin-top: 6px;
+  font-size: var(--font-size-xs, 0.75rem);
+  color: var(--color-text-muted);
   text-transform: uppercase;
-  letter-spacing: 0.05em;
+  letter-spacing: 0.06em;
+  display: block;
 }
 </style>
