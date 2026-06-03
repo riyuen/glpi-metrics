@@ -23,30 +23,48 @@
       </div>
     </div>
 
-    <div class="canvas-scroll">
-      <div class="canvas-wrap" :style="{ height: Math.max(160, filtered.length * 44) + 'px' }">
-        <canvas ref="canvas" />
-      </div>
+    <div class="heatmap-scroll">
+      <table v-if="filtered.length && allWeeks.length" class="heatmap-table">
+        <thead>
+          <tr>
+            <th class="label-col"></th>
+            <th v-for="w in allWeeks" :key="w" class="week-col">{{ w }}</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr v-for="g in filtered" :key="g.name">
+            <td class="row-label" :title="g.name">{{ g.name }}</td>
+            <td
+              v-for="w in allWeeks"
+              :key="w"
+              class="heat-cell"
+              :style="cellStyle(g, w)"
+              :title="cellTitle(g, w)"
+            >
+              <span class="cell-text">{{ cellText(g, w) }}</span>
+            </td>
+          </tr>
+        </tbody>
+      </table>
+      <div v-else class="empty">Aucune donnée</div>
+    </div>
+
+    <div class="legend">
+      <span class="legend-label">0%</span>
+      <div class="legend-gradient"></div>
+      <span class="legend-label">100%</span>
     </div>
   </div>
 </template>
 
 <script setup>
-import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
-import Chart from 'chart.js/auto'
-import ChartDataLabels from 'chartjs-plugin-datalabels'
+import { ref, computed, watch } from 'vue'
 
 const props = defineProps({
-  title: String,
-  groups: Array, // [{ name, compliant, nonCompliant }]
-  theme: { type: String, default: 'dark' },
+  title:  String,
+  groups: Array, // Array<{ name, weekMap: Record<week, { compliant, nonCompliant }> }>
+  theme:  { type: String, default: 'dark' },
 })
-const emit = defineEmits(['item-click'])
-
-const C = computed(() => props.theme === 'light'
-  ? { tick: '#475569', grid: '#cbd5e1', gridFaint: '#f1f5f9' }
-  : { tick: '#94a3b8', grid: '#334155', gridFaint: '#1e293b' }
-)
 
 // Custom directive to close dropdown on outside click
 const vClickOutside = {
@@ -59,7 +77,7 @@ const vClickOutside = {
   },
 }
 
-const selected = ref([])
+const selected    = ref([])
 const dropdownOpen = ref(false)
 
 watch(
@@ -85,108 +103,56 @@ function toggleAll() {
   selected.value = allSelected.value ? [] : (props.groups ?? []).map((g) => g.name)
 }
 
-const canvas = ref(null)
+// Union of all week keys across filtered groups, sorted
+const allWeeks = computed(() => {
+  const set = new Set()
+  for (const g of filtered.value) Object.keys(g.weekMap).forEach(w => set.add(w))
+  return Array.from(set).sort()
+})
 
-function buildChart() {
-  const existing = Chart.getChart(canvas.value)
-  if (existing) existing.destroy()
-
-  if (!filtered.value.length) return
-
-  const pct = (g) => {
-    const total = g.compliant + g.nonCompliant
-    return total === 0 ? [0, 0] : [
-      Math.round((g.compliant / total) * 100),
-      Math.round((g.nonCompliant / total) * 100),
-    ]
-  }
-
-  const compliantCounts    = filtered.value.map((g) => g.compliant)
-  const nonCompliantCounts = filtered.value.map((g) => g.nonCompliant)
-  const totalCounts        = filtered.value.map((g) => g.compliant + g.nonCompliant)
-
-  new Chart(canvas.value, {
-    type: 'bar',
-    plugins: [ChartDataLabels],
-    data: {
-      labels: filtered.value.map((g) => g.name),
-      datasets: [
-        {
-          label: 'Conforme',
-          data: filtered.value.map((g) => pct(g)[0]),
-          counts: compliantCounts,
-          backgroundColor: 'rgba(16,185,129,0.8)',
-          borderRadius: 3,
-        },
-        {
-          label: 'Non conforme',
-          data: filtered.value.map((g) => pct(g)[1]),
-          counts: nonCompliantCounts,
-          backgroundColor: 'rgba(239,68,68,0.8)',
-          borderRadius: 3,
-        },
-      ],
-    },
-    options: {
-      indexAxis: 'y',
-      responsive: true,
-      maintainAspectRatio: false,
-      onClick: (event, elements) => {
-        if (elements.length > 0) emit('item-click', filtered.value[elements[0].index].name)
-      },
-      onHover: (event, elements) => {
-        event.native.target.style.cursor = elements.length > 0 ? 'pointer' : 'default'
-      },
-      plugins: {
-        legend: {
-          display: true,
-          labels: { color: C.value.tick, boxWidth: 12, padding: 16 },
-        },
-        tooltip: {
-          callbacks: {
-            title: (items) => {
-              const idx = items[0].dataIndex
-              return `${items[0].label}  (${totalCounts[idx]} ticket${totalCounts[idx] > 1 ? 's' : ''})`
-            },
-            label: (item) => {
-              const count = item.dataset.counts[item.dataIndex]
-              return ` ${item.dataset.label}: ${count} (${item.raw}%)`
-            },
-          },
-        },
-        datalabels: {
-          anchor: 'center',
-          align: 'center',
-          color: '#fff',
-          font: { size: 11, weight: 'bold' },
-          formatter: (value) => (value > 0 ? `${value}%` : ''),
-        },
-      },
-      scales: {
-        x: {
-          stacked: true,
-          min: 0,
-          max: 100,
-          ticks: { color: C.value.tick, callback: (v) => `${v}%` },
-          grid: { color: C.value.grid },
-        },
-        y: {
-          stacked: true,
-          ticks: { color: C.value.tick },
-          grid: { color: C.value.gridFaint },
-        },
-      },
-    },
-  })
+function pct(g, w) {
+  const v = g.weekMap[w]
+  if (!v) return null
+  const total = v.compliant + v.nonCompliant
+  return total ? Math.round(v.compliant / total * 100) : null
 }
 
-onMounted(() => {
-  watch([filtered, () => props.theme], buildChart, { deep: true, immediate: true })
-})
+function cellStyle(g, w) {
+  const p = pct(g, w)
+  if (p === null) return { background: 'transparent' }
 
-onUnmounted(() => {
-  Chart.getChart(canvas.value)?.destroy()
-})
+  // Interpolate red (0%) → yellow (50%) → green (100%)
+  let r, gr, b
+  if (p <= 50) {
+    const t = p / 50
+    r  = 220
+    gr = Math.round(38 + t * (161 - 38))   // 38 → 161
+    b  = 38
+  } else {
+    const t = (p - 50) / 50
+    r  = Math.round(220 - t * (220 - 34))  // 220 → 34
+    gr = Math.round(161 + t * (197 - 161)) // 161 → 197
+    b  = Math.round(38 + t * (94 - 38))    // 38 → 94
+  }
+  const alpha = props.theme === 'light' ? 0.85 : 0.75
+  return {
+    background:  `rgba(${r},${gr},${b},${alpha})`,
+    color: p < 40 ? '#fff' : (props.theme === 'light' ? '#1e293b' : '#f1f5f9'),
+  }
+}
+
+function cellText(g, w) {
+  const p = pct(g, w)
+  return p === null ? '—' : `${p}%`
+}
+
+function cellTitle(g, w) {
+  const v = g.weekMap[w]
+  if (!v) return `${g.name} – ${w}: aucune donnée`
+  const total = v.compliant + v.nonCompliant
+  const p = pct(g, w)
+  return `${g.name} – ${w}: ${p}% (${v.compliant}/${total})`
+}
 </script>
 
 <style scoped>
@@ -200,13 +166,13 @@ onUnmounted(() => {
   position: relative;
   display: flex;
   flex-direction: column;
+  gap: 12px;
 }
 
 .chart-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-bottom: 16px;
   flex-shrink: 0;
 }
 
@@ -300,12 +266,108 @@ onUnmounted(() => {
   flex-shrink: 0;
 }
 
-.canvas-scroll {
+/* Heatmap */
+.heatmap-scroll {
   flex: 1;
-  overflow-y: auto;
+  overflow: auto;
   min-height: 0;
   scrollbar-width: thin;
   scrollbar-color: var(--border) transparent;
 }
-.canvas-wrap {}
+
+.heatmap-table {
+  border-collapse: collapse;
+  font-size: 0.78rem;
+  white-space: nowrap;
+}
+
+.label-col {
+  min-width: 140px;
+  max-width: 180px;
+  padding: 0;
+  position: sticky;
+  left: 0;
+  z-index: 2;
+  background: var(--card-bg);
+}
+
+.week-col {
+  min-width: 52px;
+  padding: 4px 2px;
+  text-align: center;
+  color: var(--text-muted);
+  font-weight: 500;
+  font-size: 0.7rem;
+  writing-mode: vertical-rl;
+  transform: rotate(180deg);
+  height: 70px;
+  vertical-align: bottom;
+}
+
+.row-label {
+  padding: 0 10px 0 0;
+  color: var(--text);
+  text-align: right;
+  font-size: 0.8rem;
+  position: sticky;
+  left: 0;
+  z-index: 1;
+  background: var(--card-bg);
+  max-width: 160px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.heat-cell {
+  min-width: 52px;
+  height: 32px;
+  text-align: center;
+  border-radius: 4px;
+  padding: 0 2px;
+  cursor: default;
+  transition: opacity 0.15s;
+}
+.heat-cell:hover {
+  opacity: 0.85;
+  outline: 2px solid var(--accent);
+  outline-offset: -1px;
+}
+
+.cell-text {
+  font-size: 0.72rem;
+  font-weight: 600;
+  pointer-events: none;
+}
+
+.empty {
+  color: var(--text-muted);
+  font-size: 0.85rem;
+  padding: 20px 0;
+  text-align: center;
+}
+
+/* Legend */
+.legend {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.legend-label {
+  font-size: 0.72rem;
+  color: var(--text-muted);
+}
+
+.legend-gradient {
+  flex: 1;
+  height: 10px;
+  border-radius: 4px;
+  background: linear-gradient(to right,
+    rgba(220, 38, 38, 0.8),
+    rgba(220, 161, 38, 0.8),
+    rgba(34, 197, 94, 0.8)
+  );
+}
 </style>

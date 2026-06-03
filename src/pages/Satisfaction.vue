@@ -9,7 +9,7 @@
           réponse{{ records.length === 1 ? '' : 's' }}
         </span>
       </div>
-      <button class="reload-btn" @click="$emit('refresh')" :disabled="loading">
+      <button class="reload-btn" @click="loadSatisfaction(true)" :disabled="loading">
         {{ loading ? 'Chargement…' : 'Actualiser' }}
       </button>
     </div>
@@ -152,16 +152,13 @@
 </template>
 
 <script setup>
-import { ref, computed } from 'vue'
+import { ref, computed, inject } from 'vue'
 import { GLPI_URL } from '../api/glpi.js'
 
-defineEmits(['refresh'])
-
-const props = defineProps({
-  records: { type: Array, default: () => [] },
-  loading: { type: Boolean, default: false },
-  error:   { type: String, default: null },
-})
+const records         = inject('satisfactionRecords')
+const loading         = inject('satisfactionLoading')
+const error           = inject('satisfactionError')
+const loadSatisfaction = inject('loadSatisfaction')
 
 const expandedGroups     = ref(new Set())
 const commentGroupFilter = ref('')
@@ -175,8 +172,8 @@ function toggleScore(n) {
 
 const filteredRecords = computed(() =>
   selectedScores.value.length
-    ? props.records.filter(r => selectedScores.value.includes(r.score))
-    : props.records
+    ? records.value.filter(r => selectedScores.value.includes(r.score))
+    : records.value
 )
 
 function toggleGroup(name) {
