@@ -46,7 +46,7 @@
         <button class="ori-tag__remove" @click.stop="activeFilters.entities.length = 0" aria-label="Retirer">×</button>
       </span>
       <span v-if="activeFilters.periods.length" class="ori-tag ori-tag--info">
-        {{ period === 'week' ? 'Semaine' : period === 'month' ? 'Mois' : 'Trimestre' }} : {{ activeFilters.periods.join(', ') }}
+        {{ period === 'week' ? 'Semaine' : period === 'month' ? 'Mois' : period === 'quarter' ? 'Trimestre' : 'Semaine' }} : {{ activeFilters.periods.join(', ') }}
         <button class="ori-tag__remove" @click.stop="activeFilters.periods.length = 0" aria-label="Retirer">×</button>
       </span>
       <span v-if="activeFilters.compliance" class="ori-tag ori-tag--info">
@@ -61,6 +61,7 @@
       <button class="ori-tabs__tab" :class="{ 'ori-tabs__tab--active': period === 'week' }" @click="period = 'week'">Hebdomadaire</button>
       <button class="ori-tabs__tab" :class="{ 'ori-tabs__tab--active': period === 'month' }" @click="period = 'month'">Mensuel</button>
       <button class="ori-tabs__tab" :class="{ 'ori-tabs__tab--active': period === 'quarter' }" @click="period = 'quarter'">Trimestriel</button>
+      <button class="ori-tabs__tab" :class="{ 'ori-tabs__tab--active': period === 'last4weeks' }" @click="period = 'last4weeks'">4 dernières semaines</button>
     </div>
 
     <!-- Export PPT button -->
@@ -304,8 +305,12 @@ const baseFilteredTickets = computed(() => {
 
 const filteredTickets = computed(() => {
   let ts = baseFilteredTickets.value
+  if (period.value === 'last4weeks') {
+    const keys = new Set(last4WeekKeys.value)
+    ts = ts.filter(t => keys.has(t.week))
+  }
   if (activeFilters.periods.length) {
-    const field = period.value === 'week' ? 'week' : period.value === 'month' ? 'month' : 'quarter'
+    const field = period.value === 'month' ? 'month' : period.value === 'quarter' ? 'quarter' : 'week'
     ts = ts.filter(t => activeFilters.periods.includes(t[field]))
   }
   return ts
@@ -573,10 +578,18 @@ const priorityItems = computed(() =>
   })
 )
 
+const last4WeekKeys = computed(() => {
+  const allWeeks = Object.keys(timeChartMetrics.value.byWeek)
+  return allWeeks.slice(-4)
+})
+
 const periodSrc = (week, month, quarter) => {
   if (period.value === 'week')    return week
   if (period.value === 'month')   return month
-  return quarter
+  if (period.value === 'quarter') return quarter
+  // last4weeks: filter week data to the 4 most recent week keys
+  const keys = new Set(last4WeekKeys.value)
+  return Object.fromEntries(Object.entries(week).filter(([k]) => keys.has(k)))
 }
 
 const periodLabels = computed(() =>
@@ -602,11 +615,19 @@ const groupComplianceData = computed(() =>
 )
 
 const groupWeekComplianceData = computed(() => {
-  const src = periodSrc(
-    timeChartMetrics.value.byGroupWeekCompliance,
-    timeChartMetrics.value.byGroupMonthCompliance,
-    timeChartMetrics.value.byGroupQuarterCompliance,
-  )
+  let src = period.value === 'last4weeks'
+    ? timeChartMetrics.value.byGroupWeekCompliance
+    : periodSrc(
+        timeChartMetrics.value.byGroupWeekCompliance,
+        timeChartMetrics.value.byGroupMonthCompliance,
+        timeChartMetrics.value.byGroupQuarterCompliance,
+      )
+  if (period.value === 'last4weeks') {
+    const keys = new Set(last4WeekKeys.value)
+    src = Object.fromEntries(
+      Object.entries(src ?? {}).map(([g, wm]) => [g, Object.fromEntries(Object.entries(wm).filter(([k]) => keys.has(k)))])
+    )
+  }
   return Object.entries(src ?? {})
     .map(([name, weekMap]) => ({ name, weekMap }))
     .sort((a, b) => {
@@ -648,14 +669,14 @@ const chartProps = computed(() => ({
   status:   { title: 'Par statut',   items: statusItems.value },
   priority: { title: 'Par priorité', items: priorityItems.value },
   line: {
-    title:              period.value === 'week' ? 'Tickets ouverts par semaine' : period.value === 'month' ? 'Tickets ouverts par mois' : 'Tickets ouverts par trimestre',
+    title:              period.value === 'month' ? 'Tickets ouverts par mois' : period.value === 'quarter' ? 'Tickets ouverts par trimestre' : period.value === 'last4weeks' ? 'Tickets ouverts — 4 dernières semaines' : 'Tickets ouverts par semaine',
     labels:             periodLabels.value,
     data:               periodData.value,
     theme:              theme.value,
     highlightedPeriods: activeFilters.periods,
   },
   compliance: {
-    title:              period.value === 'week' ? 'Conformité SLA par semaine' : period.value === 'month' ? 'Conformité SLA par mois' : 'Conformité SLA par trimestre',
+    title:              period.value === 'month' ? 'Conformité SLA par mois' : period.value === 'quarter' ? 'Conformité SLA par trimestre' : period.value === 'last4weeks' ? 'Conformité SLA — 4 dernières semaines' : 'Conformité SLA par semaine',
     weekData:           periodCompliance.value,
     theme:              theme.value,
     highlightedPeriods: activeFilters.periods,
@@ -669,12 +690,12 @@ const chartProps = computed(() => ({
     highlightedPeriods: activeFilters.periods,
   },
   tto: {
-    title:  period.value === 'week' ? 'TTO moy. par type SLA — hebdo.' : period.value === 'month' ? 'TTO moy. par type SLA — mensuel' : 'TTO moy. par type SLA — trimestriel',
+    title:  period.value === 'month' ? 'TTO moy. par type SLA — mensuel' : period.value === 'quarter' ? 'TTO moy. par type SLA — trimestriel' : period.value === 'last4weeks' ? 'TTO moy. par type SLA — 4 sem.' : 'TTO moy. par type SLA — hebdo.',
     ...ttoChartData.value,
     theme:  theme.value,
   },
   mttr: {
-    title:              period.value === 'week' ? 'MTTR par type SLA — hebdo.' : period.value === 'month' ? 'MTTR par type SLA — mensuel' : 'MTTR par type SLA — trimestriel',
+    title:              period.value === 'month' ? 'MTTR par type SLA — mensuel' : period.value === 'quarter' ? 'MTTR par type SLA — trimestriel' : period.value === 'last4weeks' ? 'MTTR par type SLA — 4 sem.' : 'MTTR par type SLA — hebdo.',
     ...mttrChartData.value,
     theme:              theme.value,
     highlightedPeriods: activeFilters.periods,
