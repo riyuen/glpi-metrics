@@ -128,6 +128,15 @@ def to_iso_week(date_str: str) -> str:
     return f"{iso_year}-W{iso_week:02d}"
 
 
+def to_iso_quarter(date_str: str) -> str:
+    """Return 'YYYY-QX' quarter label for a GLPI date string."""
+    try:
+        d = datetime.fromisoformat(date_str)
+    except (ValueError, TypeError):
+        return ""
+    return f"{d.year}-Q{(d.month - 1) // 3 + 1}"
+
+
 def ms_between(a: str | None, b: str | None) -> int | None:
     if not a or not b:
         return None
@@ -224,8 +233,9 @@ def fetch_and_write(**_):
         status = int(ticket.get("status", 0))
         priority = int(ticket.get("priority", 0))
         date   = ticket.get("date")
-        week   = to_iso_week(date) if date else None
-        month  = date[:7] if date else None
+        week    = to_iso_week(date) if date else None
+        month   = date[:7] if date else None
+        quarter = to_iso_quarter(date) if date else None
         group  = group_map.get(tid, "Unassigned")
         entity = entity_names.get(ticket.get("entities_id"), f"Entity {ticket.get('entities_id')}")
         breached = is_breached(ticket)
@@ -253,6 +263,7 @@ def fetch_and_write(**_):
             "priority":     priority,
             "week":         week,
             "month":        month,
+            "quarter":      quarter,
             "group":        group,
             "entity":       entity,
             "breached":     breached,

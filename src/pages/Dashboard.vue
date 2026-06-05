@@ -46,7 +46,7 @@
         <button class="ori-tag__remove" @click.stop="activeFilters.entities.length = 0" aria-label="Retirer">×</button>
       </span>
       <span v-if="activeFilters.periods.length" class="ori-tag ori-tag--info">
-        {{ period === 'week' ? 'Semaine' : 'Mois' }} : {{ activeFilters.periods.join(', ') }}
+        {{ period === 'week' ? 'Semaine' : period === 'month' ? 'Mois' : 'Trimestre' }} : {{ activeFilters.periods.join(', ') }}
         <button class="ori-tag__remove" @click.stop="activeFilters.periods.length = 0" aria-label="Retirer">×</button>
       </span>
       <span v-if="activeFilters.compliance" class="ori-tag ori-tag--info">
@@ -60,6 +60,7 @@
     <div class="ori-tabs__list period-toggle">
       <button class="ori-tabs__tab" :class="{ 'ori-tabs__tab--active': period === 'week' }" @click="period = 'week'">Hebdomadaire</button>
       <button class="ori-tabs__tab" :class="{ 'ori-tabs__tab--active': period === 'month' }" @click="period = 'month'">Mensuel</button>
+      <button class="ori-tabs__tab" :class="{ 'ori-tabs__tab--active': period === 'quarter' }" @click="period = 'quarter'">Trimestriel</button>
     </div>
 
     <!-- Export PPT button -->
@@ -304,7 +305,7 @@ const baseFilteredTickets = computed(() => {
 const filteredTickets = computed(() => {
   let ts = baseFilteredTickets.value
   if (activeFilters.periods.length) {
-    const field = period.value === 'week' ? 'week' : 'month'
+    const field = period.value === 'week' ? 'week' : period.value === 'month' ? 'month' : 'quarter'
     ts = ts.filter(t => activeFilters.periods.includes(t[field]))
   }
   return ts
@@ -312,16 +313,17 @@ const filteredTickets = computed(() => {
 
 function computeChartMetrics(tickets) {
   const byStatus = {}, byPriority = {}
-  const byWeek = {}, byMonth = {}
-  const byWeekCompliance = {}, byMonthCompliance = {}
-  const byWeekNoTTO = {}, byMonthNoTTO = {}
-  const byWeekTTO = {}, byMonthTTO = {}
+  const byWeek = {}, byMonth = {}, byQuarter = {}
+  const byWeekCompliance = {}, byMonthCompliance = {}, byQuarterCompliance = {}
+  const byWeekNoTTO = {}, byMonthNoTTO = {}, byQuarterNoTTO = {}
+  const byWeekTTO = {}, byMonthTTO = {}, byQuarterTTO = {}
   const ttoSlaGroups = new Map()
-  const byWeekMTTR = {}, byMonthMTTR = {}
+  const byWeekMTTR = {}, byMonthMTTR = {}, byQuarterMTTR = {}
   const mttrSlaGroups = new Map()
   const byGroupCompliance = {}
   const byGroupWeekCompliance = {}
   const byGroupMonthCompliance = {}
+  const byGroupQuarterCompliance = {}
   const byEntity = {}
   const byTechGroup = {}
 
@@ -330,17 +332,21 @@ function computeChartMetrics(tickets) {
     byPriority[t.priority] = (byPriority[t.priority] ?? 0) + 1
 
     if (t.week) {
-      byWeek[t.week]   = (byWeek[t.week]   ?? 0) + 1
-      byMonth[t.month] = (byMonth[t.month] ?? 0) + 1
+      const tq = t.quarter ?? `${t.month.slice(0, 4)}-Q${Math.ceil(Number(t.month.slice(5, 7)) / 3)}`
+      byWeek[t.week]     = (byWeek[t.week]     ?? 0) + 1
+      byMonth[t.month]   = (byMonth[t.month]   ?? 0) + 1
+      byQuarter[tq]      = (byQuarter[tq]       ?? 0) + 1
 
-      if (!byWeekCompliance[t.week])   byWeekCompliance[t.week]   = { compliant: 0, nonCompliant: 0 }
-      if (!byMonthCompliance[t.month]) byMonthCompliance[t.month] = { compliant: 0, nonCompliant: 0 }
-      if (t.breached) { byWeekCompliance[t.week].nonCompliant++; byMonthCompliance[t.month].nonCompliant++ }
-      else            { byWeekCompliance[t.week].compliant++;    byMonthCompliance[t.month].compliant++ }
+      if (!byWeekCompliance[t.week])    byWeekCompliance[t.week]    = { compliant: 0, nonCompliant: 0 }
+      if (!byMonthCompliance[t.month])  byMonthCompliance[t.month]  = { compliant: 0, nonCompliant: 0 }
+      if (!byQuarterCompliance[tq])     byQuarterCompliance[tq]     = { compliant: 0, nonCompliant: 0 }
+      if (t.breached) { byWeekCompliance[t.week].nonCompliant++; byMonthCompliance[t.month].nonCompliant++; byQuarterCompliance[tq].nonCompliant++ }
+      else            { byWeekCompliance[t.week].compliant++;    byMonthCompliance[t.month].compliant++;    byQuarterCompliance[tq].compliant++ }
 
       if (t.hasNoTTO && t.status !== 5 && t.status !== 6) {
         byWeekNoTTO[t.week]   = (byWeekNoTTO[t.week]   ?? 0) + 1
         byMonthNoTTO[t.month] = (byMonthNoTTO[t.month] ?? 0) + 1
+        byQuarterNoTTO[tq]    = (byQuarterNoTTO[tq]    ?? 0) + 1
       }
 
       if (t.slaTTRName != null && t.slaTTRMs != null) {
@@ -364,6 +370,10 @@ function computeChartMetrics(tickets) {
         if (!byMonthMTTR[t.month])         byMonthMTTR[t.month]         = {}
         if (!byMonthMTTR[t.month][slaKey]) byMonthMTTR[t.month][slaKey] = { sum: 0, count: 0 }
         byMonthMTTR[t.month][slaKey].sum += t.resolveMs; byMonthMTTR[t.month][slaKey].count++
+
+        if (!byQuarterMTTR[tq])          byQuarterMTTR[tq]          = {}
+        if (!byQuarterMTTR[tq][slaKey])  byQuarterMTTR[tq][slaKey]  = { sum: 0, count: 0 }
+        byQuarterMTTR[tq][slaKey].sum += t.resolveMs; byQuarterMTTR[tq][slaKey].count++
       }
 
       if (t.ttoSlaName != null && t.slaTTOMs != null) {
@@ -387,6 +397,10 @@ function computeChartMetrics(tickets) {
         if (!byMonthTTO[t.month])         byMonthTTO[t.month]         = {}
         if (!byMonthTTO[t.month][slaKey]) byMonthTTO[t.month][slaKey] = { sum: 0, count: 0 }
         byMonthTTO[t.month][slaKey].sum += t.actualTTOMs; byMonthTTO[t.month][slaKey].count++
+
+        if (!byQuarterTTO[tq])          byQuarterTTO[tq]          = {}
+        if (!byQuarterTTO[tq][slaKey])  byQuarterTTO[tq][slaKey]  = { sum: 0, count: 0 }
+        byQuarterTTO[tq][slaKey].sum += t.actualTTOMs; byQuarterTTO[tq][slaKey].count++
       }
     }
 
@@ -395,6 +409,8 @@ function computeChartMetrics(tickets) {
     else            byGroupCompliance[t.group].compliant++
 
     if (t.week) {
+      const tq = t.quarter ?? `${t.month.slice(0, 4)}-Q${Math.ceil(Number(t.month.slice(5, 7)) / 3)}`
+
       if (!byGroupWeekCompliance[t.group]) byGroupWeekCompliance[t.group] = {}
       if (!byGroupWeekCompliance[t.group][t.week]) byGroupWeekCompliance[t.group][t.week] = { compliant: 0, nonCompliant: 0 }
       if (t.breached) byGroupWeekCompliance[t.group][t.week].nonCompliant++
@@ -404,6 +420,11 @@ function computeChartMetrics(tickets) {
       if (!byGroupMonthCompliance[t.group][t.month]) byGroupMonthCompliance[t.group][t.month] = { compliant: 0, nonCompliant: 0 }
       if (t.breached) byGroupMonthCompliance[t.group][t.month].nonCompliant++
       else            byGroupMonthCompliance[t.group][t.month].compliant++
+
+      if (!byGroupQuarterCompliance[t.group]) byGroupQuarterCompliance[t.group] = {}
+      if (!byGroupQuarterCompliance[t.group][tq]) byGroupQuarterCompliance[t.group][tq] = { compliant: 0, nonCompliant: 0 }
+      if (t.breached) byGroupQuarterCompliance[t.group][tq].nonCompliant++
+      else            byGroupQuarterCompliance[t.group][tq].compliant++
     }
 
     byEntity[t.entity] = (byEntity[t.entity] ?? 0) + 1
@@ -442,20 +463,25 @@ function computeChartMetrics(tickets) {
   return {
     byStatus,
     byPriority,
-    byWeek:             sort(byWeek),
-    byMonth:            sort(byMonth),
-    byWeekCompliance:   sort(byWeekCompliance),
-    byMonthCompliance:  sort(byMonthCompliance),
-    byWeekNoTTO:        sort(byWeekNoTTO),
-    byMonthNoTTO:       sort(byMonthNoTTO),
-    byWeekTTO:          toTTOAvg(byWeekTTO),
-    byMonthTTO:         toTTOAvg(byMonthTTO),
+    byWeek:              sort(byWeek),
+    byMonth:             sort(byMonth),
+    byQuarter:           sort(byQuarter),
+    byWeekCompliance:    sort(byWeekCompliance),
+    byMonthCompliance:   sort(byMonthCompliance),
+    byQuarterCompliance: sort(byQuarterCompliance),
+    byWeekNoTTO:         sort(byWeekNoTTO),
+    byMonthNoTTO:        sort(byMonthNoTTO),
+    byQuarterNoTTO:      sort(byQuarterNoTTO),
+    byWeekTTO:           toTTOAvg(byWeekTTO),
+    byMonthTTO:          toTTOAvg(byMonthTTO),
+    byQuarterTTO:        toTTOAvg(byQuarterTTO),
     ttoSlaGroups: [...ttoSlaGroups.entries()].map(([name, g]) => ({
       name,
       targetH: g.targetH ?? (g.minSlaTTOMs != null ? +(g.minSlaTTOMs / 3600000).toFixed(1) : null),
     })),
-    byWeekMTTR:         toMTTRAvg(byWeekMTTR),
-    byMonthMTTR:        toMTTRAvg(byMonthMTTR),
+    byWeekMTTR:          toMTTRAvg(byWeekMTTR),
+    byMonthMTTR:         toMTTRAvg(byMonthMTTR),
+    byQuarterMTTR:       toMTTRAvg(byQuarterMTTR),
     mttrSlaGroups: [...mttrSlaGroups.entries()].map(([name, g]) => ({
       name,
       targetH: g.targetH ?? (g.minSlaTTRMs != null ? +(g.minSlaTTRMs / 3600000).toFixed(1) : null),
@@ -463,6 +489,7 @@ function computeChartMetrics(tickets) {
     byGroupCompliance,
     byGroupWeekCompliance,
     byGroupMonthCompliance,
+    byGroupQuarterCompliance,
     topEntities: Object.entries(byEntity).sort(([, a], [, b]) => b - a).slice(0, 10),
     techGroups: Object.entries(byTechGroup)
       .map(([group, techs]) => {
@@ -546,21 +573,27 @@ const priorityItems = computed(() =>
   })
 )
 
+const periodSrc = (week, month, quarter) => {
+  if (period.value === 'week')    return week
+  if (period.value === 'month')   return month
+  return quarter
+}
+
 const periodLabels = computed(() =>
-  Object.keys(period.value === 'week' ? timeChartMetrics.value.byWeek : timeChartMetrics.value.byMonth)
+  Object.keys(periodSrc(timeChartMetrics.value.byWeek, timeChartMetrics.value.byMonth, timeChartMetrics.value.byQuarter))
 )
 const periodData = computed(() =>
-  Object.values(period.value === 'week' ? timeChartMetrics.value.byWeek : timeChartMetrics.value.byMonth)
+  Object.values(periodSrc(timeChartMetrics.value.byWeek, timeChartMetrics.value.byMonth, timeChartMetrics.value.byQuarter))
 )
 const periodCompliance = computed(() => {
-  const src = period.value === 'week' ? timeChartMetrics.value.byWeekCompliance : timeChartMetrics.value.byMonthCompliance
+  const src = periodSrc(timeChartMetrics.value.byWeekCompliance, timeChartMetrics.value.byMonthCompliance, timeChartMetrics.value.byQuarterCompliance)
   return Object.entries(src).map(([week, v]) => ({ week, ...v }))
 })
 const periodNoTTOLabels = computed(() =>
-  Object.keys(period.value === 'week' ? timeChartMetrics.value.byWeekNoTTO : timeChartMetrics.value.byMonthNoTTO)
+  Object.keys(periodSrc(timeChartMetrics.value.byWeekNoTTO, timeChartMetrics.value.byMonthNoTTO, timeChartMetrics.value.byQuarterNoTTO))
 )
 const periodNoTTOData = computed(() =>
-  Object.values(period.value === 'week' ? timeChartMetrics.value.byWeekNoTTO : timeChartMetrics.value.byMonthNoTTO)
+  Object.values(periodSrc(timeChartMetrics.value.byWeekNoTTO, timeChartMetrics.value.byMonthNoTTO, timeChartMetrics.value.byQuarterNoTTO))
 )
 const groupComplianceData = computed(() =>
   Object.entries(chartMetrics.value.byGroupCompliance)
@@ -569,9 +602,11 @@ const groupComplianceData = computed(() =>
 )
 
 const groupWeekComplianceData = computed(() => {
-  const src = period.value === 'week'
-    ? timeChartMetrics.value.byGroupWeekCompliance
-    : timeChartMetrics.value.byGroupMonthCompliance
+  const src = periodSrc(
+    timeChartMetrics.value.byGroupWeekCompliance,
+    timeChartMetrics.value.byGroupMonthCompliance,
+    timeChartMetrics.value.byGroupQuarterCompliance,
+  )
   return Object.entries(src ?? {})
     .map(([name, weekMap]) => ({ name, weekMap }))
     .sort((a, b) => {
@@ -582,9 +617,9 @@ const groupWeekComplianceData = computed(() => {
 })
 
 const mttrChartData = computed(() => {
-  const byMTTR  = period.value === 'week' ? timeChartMetrics.value.byWeekMTTR  : timeChartMetrics.value.byMonthMTTR
-  const labels  = Object.keys(period.value === 'week' ? timeChartMetrics.value.byWeek : timeChartMetrics.value.byMonth)
-  const groups  = timeChartMetrics.value.mttrSlaGroups ?? []
+  const byMTTR = periodSrc(timeChartMetrics.value.byWeekMTTR, timeChartMetrics.value.byMonthMTTR, timeChartMetrics.value.byQuarterMTTR)
+  const labels = Object.keys(periodSrc(timeChartMetrics.value.byWeek, timeChartMetrics.value.byMonth, timeChartMetrics.value.byQuarter))
+  const groups = timeChartMetrics.value.mttrSlaGroups ?? []
   return {
     labels,
     datasets: groups.map(g => ({
@@ -596,8 +631,8 @@ const mttrChartData = computed(() => {
 })
 
 const ttoChartData = computed(() => {
-  const byTTO  = period.value === 'week' ? timeChartMetrics.value.byWeekTTO  : timeChartMetrics.value.byMonthTTO
-  const labels = Object.keys(period.value === 'week' ? timeChartMetrics.value.byWeek : timeChartMetrics.value.byMonth)
+  const byTTO  = periodSrc(timeChartMetrics.value.byWeekTTO, timeChartMetrics.value.byMonthTTO, timeChartMetrics.value.byQuarterTTO)
+  const labels = Object.keys(periodSrc(timeChartMetrics.value.byWeek, timeChartMetrics.value.byMonth, timeChartMetrics.value.byQuarter))
   const groups = timeChartMetrics.value.ttoSlaGroups ?? []
   return {
     labels,
@@ -613,14 +648,14 @@ const chartProps = computed(() => ({
   status:   { title: 'Par statut',   items: statusItems.value },
   priority: { title: 'Par priorité', items: priorityItems.value },
   line: {
-    title:              period.value === 'week' ? 'Tickets ouverts par semaine' : 'Tickets ouverts par mois',
+    title:              period.value === 'week' ? 'Tickets ouverts par semaine' : period.value === 'month' ? 'Tickets ouverts par mois' : 'Tickets ouverts par trimestre',
     labels:             periodLabels.value,
     data:               periodData.value,
     theme:              theme.value,
     highlightedPeriods: activeFilters.periods,
   },
   compliance: {
-    title:              period.value === 'week' ? 'Conformité SLA par semaine' : 'Conformité SLA par mois',
+    title:              period.value === 'week' ? 'Conformité SLA par semaine' : period.value === 'month' ? 'Conformité SLA par mois' : 'Conformité SLA par trimestre',
     weekData:           periodCompliance.value,
     theme:              theme.value,
     highlightedPeriods: activeFilters.periods,
@@ -634,12 +669,12 @@ const chartProps = computed(() => ({
     highlightedPeriods: activeFilters.periods,
   },
   tto: {
-    title:  period.value === 'week' ? 'TTO moy. par type SLA — hebdo.' : 'TTO moy. par type SLA — mensuel',
+    title:  period.value === 'week' ? 'TTO moy. par type SLA — hebdo.' : period.value === 'month' ? 'TTO moy. par type SLA — mensuel' : 'TTO moy. par type SLA — trimestriel',
     ...ttoChartData.value,
     theme:  theme.value,
   },
   mttr: {
-    title:              period.value === 'week' ? 'MTTR par type SLA — hebdo.' : 'MTTR par type SLA — mensuel',
+    title:              period.value === 'week' ? 'MTTR par type SLA — hebdo.' : period.value === 'month' ? 'MTTR par type SLA — mensuel' : 'MTTR par type SLA — trimestriel',
     ...mttrChartData.value,
     theme:              theme.value,
     highlightedPeriods: activeFilters.periods,

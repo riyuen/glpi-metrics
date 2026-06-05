@@ -1,0 +1,102 @@
+# Ori - Design system de l'administration de la Polynésie française
+
+> Ori est le design system mutualisé des 54 services administratifs de la Polynésie française. Multi-framework (React, Angular, CSS pur), bâti sur une source unique de design tokens W3C DTCG. Conçu pour produire des applications web officielles accessibles RGAA AA, sans favoriser un service en particulier.
+
+Positionnement :
+
+- **Service public** : généricité institutionnelle, identité visuelle Polynésie française et non d'un service spécifique
+- **RGAA AA baseline obligatoire** : ensemble des stories Storybook validées WCAG 2.0 AA en CI à chaque PR (axe-core, 0 violation - le compte exact vit dans `index.json`)
+- **Parité visuelle React ↔ Angular** : test pixel-à-pixel disponible à la demande via le workflow `Visual parity React ↔ Angular` (label `visual-test` sur PR ou `gh workflow run`). Phase d'observation actuellement, non bloquant pour le merge.
+- **Natif d'abord** : éléments HTML natifs privilégiés systématiquement (`<select>`, `<input type="date">`, etc.) pour garantir l'a11y sans audit à recommencer
+- **Bundle minimal** : adapté aux connexions limitées des archipels éloignés
+- **Multi-framework** : même apparence visuelle garantie sur React, Angular, HTML pur depuis une source unique de tokens
+
+Versionning : pré-1.0 (cf. [décision C.5](https://ori.gov.pf/storybook/react/?path=/docs/d%C3%A9cisions-d%C3%A9cisions-%C3%A0-prendre--docs)). Patch = backwards-compatible. Minor = breaking changes autorisés. Major (1.0) sortira après stabilisation.
+
+## Packages npm
+
+Tous publiés sous le scope `@govpf/`.
+
+- [@govpf/ori-react](https://www.npmjs.com/package/@govpf/ori-react) : composants React / Next.js
+- [@govpf/ori-angular](https://www.npmjs.com/package/@govpf/ori-angular) : composants Angular standalone (≥ 20)
+- [@govpf/ori-tailwind-preset](https://www.npmjs.com/package/@govpf/ori-tailwind-preset) : preset Tailwind + classes sémantiques `.ori-*` (convention de nommage : voir section Conventions)
+- [@govpf/ori-css](https://www.npmjs.com/package/@govpf/ori-css) : bundle CSS drop-in (intégrations GLPI, emails)
+- [@govpf/ori-tokens](https://www.npmjs.com/package/@govpf/ori-tokens) : design tokens W3C DTCG (CSS variables, JS, SCSS)
+
+## Endpoints machine-readable
+
+Pour explorer le design system programmatiquement sans exécuter le JavaScript du Storybook :
+
+- [https://ori.gov.pf/storybook/react/index.json](https://ori.gov.pf/storybook/react/index.json) : index complet des entrées React (format Storybook v5, ~100 ko, JSON). Contient pour chaque entrée : `id`, `title`, `name`, `importPath`, `tags`, `type`.
+- [https://ori.gov.pf/storybook/angular/index.json](https://ori.gov.pf/storybook/angular/index.json) : équivalent Angular.
+
+L'index contient deux types d'entrées (champ `type`) à filtrer selon l'usage : `type === "story"` pour les stories interactives, `type === "docs"` pour les fiches autodocs et MDX rattachés. Pour explorer les composants disponibles, filtrer sur `type === "story"`. Pour lire la documentation rédigée, filtrer sur `type === "docs"`.
+
+Pour récupérer le contenu d'une story spécifique (HTML rendu) : `https://ori.gov.pf/storybook/react/iframe.html?id={story-id}` ou la fiche docs `https://ori.gov.pf/storybook/react/?path=/docs/{story-id}`.
+
+Sources annexes : [code source GitHub](https://github.com/govpf/ori) (sources React/Angular dans `packages/`, MDX dans `packages/docs/src/`) et [roadmap publique](https://github.com/orgs/govpf/projects/3) (Backlog, Up next, In progress, Done).
+
+## Composants livrés
+
+**54 composants au total** (à ne pas confondre avec les 54 services administratifs PF mentionnés en intro - simple coïncidence numérique). Inventaire snapshot avril 2026, classés en 3 niveaux selon la [décision B.0](https://github.com/govpf/ori/blob/main/packages/docs/src/Decisions-A-Prendre.mdx#b0--classification-des-composants-en-3-niveaux) :
+
+- **Primitives** : 39 composants
+- **Compositions** : 12 composants
+- **Templates** : 3 composants
+
+L'inventaire à jour vit dans le repo et l'index Storybook ([https://ori.gov.pf/storybook/react/index.json](https://ori.gov.pf/storybook/react/index.json)).
+
+### Primitives (39)
+
+Briques atomiques, API agnostique du domaine, présentes dans tous les DS de référence.
+
+- Actions : Button, Link, LanguageSwitcher, DownloadButton (4)
+- Saisie : Input, Textarea, Select, Combobox, MultiSelect, Checkbox, Radio, RichRadio, Switch, DatePicker, PhoneInput, SearchBar (12)
+- Feedback : Alert, AlertDialog, Dialog, Notification, Toast, Tooltip, Spinner, Progress, Skeleton (9)
+- Navigation : Breadcrumb, Tabs, Steps, Pagination, DropdownMenu, Accordion (6)
+- Affichage : Card, Tag, Avatar, Logo, Highlight, Statistic, Table, Timeline (8)
+
+### Compositions (12)
+
+Assemblages de primitives, paramétrables mais génériques.
+
+- AppShell : layout d'app avec header sticky, sidebar drawer responsive, skip link
+- LoginLayout : page d'authentification générique
+- Form / FormSection / FormField / FormActions : formulaire standardisé
+- Wizard : workflow multi-étapes
+- DataTable : Table + Pagination + filtre + actions de ligne
+- EmptyState : bloc d'absence de données
+- Header, Footer, MainNavigation, SideMenu, FileUpload, FileCard
+
+### Templates (3)
+
+Orientés cas d'usage administratif spécifique.
+
+- ErrorPage : page d'erreur 404 / 500 avec brand PF
+- LegalLayout : pages légales (mentions, accessibilité, RGPD, plan du site)
+- AuthButton : bouton fournisseur d'identité (Rumia usagers, GOV Connect agents)
+
+## Décisions transverses
+
+Documentées en MDX dans le repo, source de vérité publique :
+
+- [packages/docs/src/Decisions-A-Prendre.mdx](https://github.com/govpf/ori/blob/main/packages/docs/src/Decisions-A-Prendre.mdx) : décisions architecturales tranchées
+- [packages/docs/src/Validation-Accessibilite.mdx](https://github.com/govpf/ori/blob/main/packages/docs/src/Validation-Accessibilite.mdx) : méthode et couverture a11y
+- [packages/docs/src/Validation-Parite-Visuelle.mdx](https://github.com/govpf/ori/blob/main/packages/docs/src/Validation-Parite-Visuelle.mdx) : test de parité visuelle React ↔ Angular (à la demande, non bloquant en phase d'observation)
+- [packages/docs/src/Convention-Nommage.mdx](https://github.com/govpf/ori/blob/main/packages/docs/src/Convention-Nommage.mdx) : convention React PascalCase ↔ CSS kebab-case + tableau de correspondance des 54 composants → classes CSS
+
+## Conventions
+
+- **Tokens DTCG** : pas d'accès direct à un primitif (`color.primary.500`), toujours un alias sémantique (`color.brand.primary`). Permet bascule de palette ou thème sombre sans toucher au code.
+- **Classes sémantiques** : composants stylés via `.ori-button`, `.ori-card`… définies dans le plugin Tailwind. Convention : nom de dossier React PascalCase → classe CSS kebab-case (ex. `AlertDialog/` → `.ori-alert-dialog`). Les classes consomment des CSS variables → bascule de thème dynamique sans recompilation.
+- **Pas d'utilitaires Tailwind inline dans le DS** : le DS expose des classes nommées. Les utilitaires Tailwind restent disponibles pour la mise en page côté apps consommatrices.
+- **React** : composants standards avec `forwardRef`, `clsx` pour les classes.
+- **Angular** : composants `standalone`, `ChangeDetectionStrategy.OnPush`, `ViewEncapsulation.None`.
+
+## Thème sombre
+
+Toggle via `data-theme="dark"` (ou classe `.dark-theme`) sur `<html>`. Pas de recompilation, juste un attribut. Fonctionne identiquement React, Angular et CSS pur.
+
+## Licence
+
+[MIT](https://github.com/govpf/ori/blob/main/LICENSE) - Copyright © 2026 Gouvernement de la Polynésie française.
