@@ -19,6 +19,7 @@ dist-ssr
 
 # Claude Code local config
 .claude/
+CLAUDE.md
 
 # Editor directories and files
 .vscode/*

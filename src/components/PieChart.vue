@@ -10,6 +10,7 @@
 <script setup>
 import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 import Chart from 'chart.js/auto'
+import { withAlpha } from '../lib/colors.js'
 
 const PALETTE = [
   '#38bdf8', '#a78bfa', '#34d399', '#fb923c',
@@ -22,6 +23,12 @@ const props = defineProps({
   // Array of [label, count] pairs
   items: Array,
   theme: { type: String, default: 'dark' },
+  // per-slice colors (defaults to the built-in palette)
+  colors: { type: Array, default: null },
+  // donut hole, e.g. '55%' (null = full pie)
+  cutout: { type: [String, Number], default: null },
+  // cross-filter: these labels get dimmed
+  dimmedLabels: { type: Array, default: () => [] },
 })
 const emit = defineEmits(['item-click'])
 
@@ -41,6 +48,11 @@ function buildChart() {
   const labels = props.items.map(([label]) => label)
   const data = props.items.map(([, count]) => count)
   const total = data.reduce((s, v) => s + v, 0)
+  const baseColors = props.colors ?? PALETTE
+  const sliceColors = labels.map((l, i) => {
+    const base = baseColors[i % baseColors.length]
+    return props.dimmedLabels.includes(l) ? withAlpha(base, 0.15) : base
+  })
 
   new Chart(canvas.value, {
     type: 'pie',
@@ -48,7 +60,7 @@ function buildChart() {
       labels,
       datasets: [{
         data,
-        backgroundColor: PALETTE,
+        backgroundColor: sliceColors,
         borderColor: C.value.pieBorder,
         borderWidth: 2,
       }],
@@ -56,6 +68,7 @@ function buildChart() {
     options: {
       responsive: true,
       maintainAspectRatio: false,
+      ...(props.cutout != null ? { cutout: props.cutout } : {}),
       onClick: (event, elements) => {
         if (elements.length > 0) emit('item-click', props.items[elements[0].index][0])
       },
@@ -86,7 +99,7 @@ function buildChart() {
 }
 
 onMounted(() => {
-  watch([() => props.items, () => props.theme], buildChart, { deep: true, immediate: true })
+  watch([() => props.items, () => props.theme, () => props.colors, () => props.cutout, () => props.dimmedLabels], buildChart, { deep: true, immediate: true })
 })
 
 onUnmounted(() => {

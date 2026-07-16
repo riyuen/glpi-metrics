@@ -18,6 +18,8 @@ const props = defineProps({
   data: Array,
   theme: { type: String, default: 'dark' },
   highlightedPeriods: { type: Array, default: () => [] },
+  // appended to values in tooltips/labels ('', '%', 'h', 'j', …)
+  valueSuffix: { type: String, default: '' },
 })
 const emit = defineEmits(['item-click'])
 
@@ -74,7 +76,9 @@ function buildChart() {
         legend: { display: false },
         tooltip: {
           callbacks: {
-            label: (item) => ` ${item.raw} ticket${item.raw > 1 ? 's' : ''} ouvert${item.raw > 1 ? 's' : ''}`,
+            label: (item) => props.valueSuffix
+              ? ` ${item.raw}${props.valueSuffix}`
+              : ` ${item.raw} ticket${item.raw > 1 ? 's' : ''}`,
           },
         },
         datalabels: {
@@ -82,7 +86,7 @@ function buildChart() {
           align: 'top',
           color: (ctx) => labelColors[ctx.dataIndex],
           font: { size: 11 },
-          formatter: (value) => value,
+          formatter: (value) => value == null ? '' : `${value}${props.valueSuffix}`,
         },
       },
       scales: {

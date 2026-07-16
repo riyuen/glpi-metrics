@@ -17,9 +17,14 @@ defineProps({
   background: var(--card-bg);
   border: 1px solid var(--border);
   border-radius: 10px;
-  padding: 24px 32px;
+  padding: 24px 16px;
   text-align: center;
-  min-width: 140px;
+  box-sizing: border-box;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
 }
 .stat-value {
   font-size: 3rem;

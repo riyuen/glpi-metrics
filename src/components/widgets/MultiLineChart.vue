@@ -2,7 +2,7 @@
   <div class="line-chart-card">
     <div class="chart-header">
       <h3 class="chart-title">{{ title }}</h3>
-      <div class="unit-toggle">
+      <div v-if="isDuration" class="unit-toggle">
         <button :class="{ active: unit === 'hours' }" @click="unit = 'hours'">Heures</button>
         <button :class="{ active: unit === 'days'  }" @click="unit = 'days'">Jours</button>
       </div>
@@ -17,13 +17,17 @@
 import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 import Chart from 'chart.js/auto'
 
-const PALETTE = ['#38bdf8', '#34d399', '#fb923c', '#a78bfa', '#f87171', '#fbbf24', '#e879f9', '#4ade80']
+// One solid color per series; target lines reuse the same color, dashed
+const PALETTE = ['#a78bfa', '#38bdf8', '#34d399', '#fb923c', '#f87171', '#fbbf24', '#e879f9', '#4ade80']
 
 const props = defineProps({
   title: String,
-  labels:   Array,
-  // [{ name, targetH, data: [hours|null, …] }] — one entry per SLA group
-  datasets: { type: Array, default: () => [] },
+  labels: Array,
+  // [{ name, data: [hours|null, …], color?, targetH? }] — duration data always in HOURS
+  series: { type: Array, default: () => [] },
+  // duration series get the Heures/Jours toggle and unit conversion
+  isDuration: { type: Boolean, default: true },
+  initialUnit: { type: String, default: 'days' }, // 'days' | 'hours'
   theme: { type: String, default: 'dark' },
 })
 const emit = defineEmits(['item-click'])
@@ -34,16 +38,21 @@ const C = computed(() => props.theme === 'light'
 )
 
 const canvas = ref(null)
-const unit = ref('days')
+const unit = ref(props.initialUnit === 'hours' ? 'hours' : 'days')
 
 const toU = (h) => {
   if (h == null) return null
+  if (!props.isDuration) return h
   return unit.value === 'hours' ? +h.toFixed(1) : +(h / 24).toFixed(2)
 }
-const fmtU = (v) => v != null ? v + (unit.value === 'hours' ? 'h' : 'j') : '—'
+const fmtU = (v) => {
+  if (v == null) return '—'
+  if (!props.isDuration) return String(v)
+  return v + (unit.value === 'hours' ? 'h' : 'j')
+}
 
 const targetLabelPlugin = {
-  id: 'ttoTargetLabels',
+  id: 'targetLabels',
   afterDatasetsDraw(chart) {
     const { ctx, chartArea, scales: { y } } = chart
     chart.data.datasets.forEach((ds, i) => {
@@ -67,13 +76,14 @@ function buildChart() {
   const existing = Chart.getChart(canvas.value)
   if (existing) existing.destroy()
 
-  if (!props.labels?.length || !props.datasets?.length) return
+  if (!props.labels?.length || !props.series?.length) return
 
   const chartDatasets = []
-  const pairs = [] // [{ actual: datasetIndex, target: datasetIndex|null }]
+  // pairs[i] = { actual: datasetIndex, target: datasetIndex|null }
+  const pairs = []
 
-  props.datasets.forEach((group, i) => {
-    const color = PALETTE[i % PALETTE.length]
+  props.series.forEach((group, i) => {
+    const color = group.color ?? PALETTE[i % PALETTE.length]
     const targetD = toU(group.targetH)
 
     const actualIdx = chartDatasets.length
@@ -122,7 +132,7 @@ function buildChart() {
       maintainAspectRatio: false,
       layout: { padding: { top: 8 } },
       onClick: (event, elements) => {
-        if (elements.length > 0) emit('item-click', props.labels[elements[0].index])
+        if (elements.length > 0) emit('item-click', elements[0].index)
       },
       onHover: (event, elements) => {
         event.native.target.style.cursor = elements.length > 0 ? 'pointer' : 'default'
@@ -135,25 +145,10 @@ function buildChart() {
             boxWidth: 12,
             padding: 14,
             font: { size: 11 },
+            // Target datasets are hidden from the legend — controlled by their paired actual line
             generateLabels: (chart) =>
               Chart.defaults.plugins.legend.labels.generateLabels(chart)
-                .filter(lbl => !chart.data.datasets[lbl.datasetIndex]?._isTarget)
-                .map(lbl => {
-                  const group = props.datasets.find(g => g.name === chart.data.datasets[lbl.datasetIndex]?.label)
-                  if (!group) return lbl
-                  const vals = (group.data ?? []).filter(v => v != null)
-                  if (!vals.length) return lbl
-                  const avgD = toU(vals.reduce((s, v) => s + v, 0) / vals.length)
-                  const targetD = toU(group.targetH)
-                  if (targetD != null) {
-                    const meeting = avgD <= targetD
-                    lbl.text = `${group.name}  ${meeting ? '✓' : '✗'}  ${fmtU(avgD)}`
-                    lbl.fontColor = meeting ? '#10b981' : '#ef4444'
-                  } else {
-                    lbl.text = `${group.name}  ${fmtU(avgD)}`
-                  }
-                  return lbl
-                }),
+                .filter(lbl => !chart.data.datasets[lbl.datasetIndex]?._isTarget),
           },
           onClick: (e, legendItem, legend) => {
             const ci = legend.chart
@@ -196,7 +191,7 @@ function buildChart() {
 
 onMounted(() => {
   watch(
-    [() => props.labels, () => props.datasets, () => props.theme, unit],
+    [() => props.labels, () => props.series, () => props.theme, unit],
     buildChart,
     { deep: true, immediate: true }
   )

@@ -1,6 +1,9 @@
 const APP_TOKEN = import.meta.env.VITE_GLPI_APP_TOKEN
 const USER_TOKEN = import.meta.env.VITE_GLPI_USER_TOKEN
 
+// Local UI preview without a reachable GLPI instance — set VITE_MOCK_DATA=true (see .env.local)
+const USE_MOCK = import.meta.env.VITE_MOCK_DATA === 'true'
+
 // In dev, requests go through the Vite proxy at /glpi-api
 // In production, set BASE to your full GLPI URL + /apirest.php
 const BASE = '/glpi-api/apirest.php'
@@ -26,6 +29,12 @@ export const PRIORITY = {
   4: 'Élevé',
   5: 'Très élevé',
   6: 'Majeur',
+}
+
+// GLPI ticket type codes
+export const TYPE = {
+  1: 'Incident',
+  2: 'Demande',
 }
 
 // --- Session cache (reused across refreshes, invalidated on 401/403) ---
@@ -70,9 +79,12 @@ let _slaMap = null
 let _slaMapExp = 0
 let _techMap = null        // { ticketId → techName }
 let _techUserIdMap = null  // { ticketId → userId }
+let _requesterMap = null   // { ticketId → requesterName }
 let _techMapExp = 0
 let _groupMembership = null  // { userId → Set<groupName> }
 let _groupMembershipExp = 0
+let _categoryNames = null  // { categoryId → name }
+let _categoryNamesExp = 0
 
 const PAGE_SIZE = 1000
 const TICKET_FIELDS = 'is_deleted=0'
@@ -98,7 +110,7 @@ function isBreached(ticket) {
 }
 
 // Returns "YYYY-WXX" ISO week label for a GLPI date string ("YYYY-MM-DD HH:MM:SS")
-function toISOWeek(dateStr) {
+export function toISOWeek(dateStr) {
   const d = new Date(dateStr)
   // Shift to the Thursday of the current week to get the ISO year/week
   const thursday = new Date(d)
@@ -214,23 +226,41 @@ async function getCachedSlaMap(sessionToken) {
   return _slaMap
 }
 
-// Returns { techMap: { ticketId → techName }, techUserIdMap: { ticketId → userId } }
-async function getCachedTechData(sessionToken) {
-  if (_techMap && Date.now() < _techMapExp) return { techMap: _techMap, techUserIdMap: _techUserIdMap }
+// Returns { techMap: { ticketId → techName }, techUserIdMap: { ticketId → userId },
+//           requesterMap: { ticketId → requesterName } } from a single Ticket_User pass.
+// type 1 = requester, type 2 = assigned technician.
+async function getCachedTicketUserData(sessionToken) {
+  if (_techMap && Date.now() < _techMapExp) {
+    return { techMap: _techMap, techUserIdMap: _techUserIdMap, requesterMap: _requesterMap }
+  }
   const [ticketUsers, userNames] = await Promise.all([
     fetchAll(sessionToken, 'Ticket_User'),
     getCachedUserNames(sessionToken),
   ])
   _techMap = {}
   _techUserIdMap = {}
+  _requesterMap = {}
   for (const tu of ticketUsers) {
     if (Number(tu.type) === 2 && !_techMap[tu.tickets_id]) {
       _techMap[tu.tickets_id] = userNames[tu.users_id] ?? `User ${tu.users_id}`
       _techUserIdMap[tu.tickets_id] = tu.users_id
+    } else if (Number(tu.type) === 1 && !_requesterMap[tu.tickets_id]) {
+      _requesterMap[tu.tickets_id] = userNames[tu.users_id] ?? `User ${tu.users_id}`
     }
   }
   _techMapExp = Date.now() + STATIC_TTL
-  return { techMap: _techMap, techUserIdMap: _techUserIdMap }
+  return { techMap: _techMap, techUserIdMap: _techUserIdMap, requesterMap: _requesterMap }
+}
+
+// Returns { categoryId → full category name } for all ITIL categories.
+async function getCachedCategoryNames(sessionToken) {
+  if (_categoryNames && Date.now() < _categoryNamesExp) return _categoryNames
+  const categories = await fetchAll(sessionToken, 'ITILCategory')
+  _categoryNames = Object.fromEntries(
+    categories.map(c => [c.id, c.completename ?? c.name])
+  )
+  _categoryNamesExp = Date.now() + STATIC_TTL
+  return _categoryNames
 }
 
 // Returns { userId → Set<groupName> } from Group_User membership records.
@@ -262,27 +292,24 @@ async function getCachedEntityNames(sessionToken) {
   return _entityNames
 }
 
+let _mockTickets = null
+
 export async function fetchSatisfaction() {
+  if (USE_MOCK) {
+    const { generateMockTickets, generateMockSatisfaction } = await import('./mock.js')
+    _mockTickets ??= generateMockTickets()
+    return generateMockSatisfaction(_mockTickets)
+  }
   for (let attempt = 0; attempt < 2; attempt++) {
     try {
       const sessionToken = await getSession()
 
-      const [satisfactions, ticketUsers, groupMap, userNames, { techMap, techUserIdMap }, groupMembership] = await Promise.all([
+      const [satisfactions, groupMap, { techMap, techUserIdMap, requesterMap }, groupMembership] = await Promise.all([
         fetchAll(sessionToken, 'TicketSatisfaction'),
-        fetchAll(sessionToken, 'Ticket_User'),
         getCachedGroupMap(sessionToken),
-        getCachedUserNames(sessionToken),
-        getCachedTechData(sessionToken),
+        getCachedTicketUserData(sessionToken),
         getCachedGroupMembership(sessionToken),
       ])
-
-      // Build requester map (type 1) from the fresh Ticket_User fetch
-      const requesterMap = {}
-      for (const tu of ticketUsers) {
-        if (Number(tu.type) === 1 && !requesterMap[tu.tickets_id]) {
-          requesterMap[tu.tickets_id] = userNames[tu.users_id] ?? `User ${tu.users_id}`
-        }
-      }
 
       return satisfactions
         .filter(s => s.date_answered && Number(s.satisfaction) > 0)
@@ -310,6 +337,7 @@ export async function fetchSatisfaction() {
         _userNames       = null
         _techMap         = null
         _techUserIdMap   = null
+        _requesterMap    = null
         _groupMembership = null
         continue
       }
@@ -319,18 +347,24 @@ export async function fetchSatisfaction() {
 }
 
 export async function fetchMetrics() {
+  if (USE_MOCK) {
+    const { generateMockTickets } = await import('./mock.js')
+    _mockTickets ??= generateMockTickets()
+    return { processedTickets: _mockTickets, total: _mockTickets.length }
+  }
   // Retry once if the cached session has expired server-side (401/403)
   for (let attempt = 0; attempt < 2; attempt++) {
     try {
       const sessionToken = await getSession()
 
-      const [tickets, groupMap, entityNames, slaMap, { techMap, techUserIdMap }, groupMembership] = await Promise.all([
+      const [tickets, groupMap, entityNames, slaMap, { techMap, techUserIdMap, requesterMap }, groupMembership, categoryNames] = await Promise.all([
         fetchAllTickets(sessionToken),
         getCachedGroupMap(sessionToken),
         getCachedEntityNames(sessionToken),
         getCachedSlaMap(sessionToken),
-        getCachedTechData(sessionToken),
+        getCachedTicketUserData(sessionToken),
         getCachedGroupMembership(sessionToken),
+        getCachedCategoryNames(sessionToken),
       ])
 
       const byStatus = {}
@@ -414,10 +448,14 @@ export async function fetchMetrics() {
           date,
           status: statusNum,
           priority: Number(priority),
+          type: Number(ticket.type) || null,
           week,
           month,
           group,
           entity,
+          category: categoryNames[ticket.itilcategories_id] ?? 'Sans catégorie',
+          requester: requesterMap[id] ?? null,
+          solvedate: ticket.solvedate ?? null,
           breached,
           hasNoTTO: !ticket.takeintoaccountdate,
           resolveMs:    rawResolveMs    > 0 ? rawResolveMs    : null,
@@ -460,14 +498,16 @@ export async function fetchMetrics() {
       }
     } catch (err) {
       // If session was rejected by the server, invalidate and retry once
-      if (attempt === 0 && err.message?.includes('401') || err.message?.includes('403')) {
+      if (attempt === 0 && (err.message?.includes('401') || err.message?.includes('403'))) {
         invalidateSession()
         _groupMap        = null
         _entityNames     = null
         _slaMap          = null
         _techMap         = null
         _techUserIdMap   = null
+        _requesterMap    = null
         _groupMembership = null
+        _categoryNames   = null
         continue
       }
       throw err
