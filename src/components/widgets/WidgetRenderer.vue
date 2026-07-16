@@ -8,6 +8,13 @@
     :theme="theme"
   />
 
+  <GroupChart
+    v-else-if="payload.kind === 'heatmap'"
+    :title="title"
+    :groups="payload.groups"
+    :theme="theme"
+  />
+
   <div v-else-if="payload.kind === 'empty' || !payload.labels?.length" class="chart-card empty-card">
     <h3 class="chart-title">{{ title }}</h3>
     <p class="empty-msg">Aucune donnée</p>
@@ -89,6 +96,7 @@ import BarChart from '../BarChart.vue'
 import LineChart from '../LineChart.vue'
 import PieChart from '../PieChart.vue'
 import TechTimeChart from '../TechTimeChart.vue'
+import GroupChart from '../GroupChart.vue'
 import GenericBar from './GenericBar.vue'
 import MultiLineChart from './MultiLineChart.vue'
 import WidgetTable from './WidgetTable.vue'

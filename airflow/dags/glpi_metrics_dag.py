@@ -167,17 +167,19 @@ def fetch_and_write(**_):
     ticket_users = fetch_all(session_token, "Ticket_User")
     group_users  = fetch_all(session_token, "Group_User")
     satisfactions = fetch_all(session_token, "TicketSatisfaction")
+    categories   = fetch_all(session_token, "ITILCategory")
 
     log.info(
         "Fetched: %d tickets, %d groups, %d group_tickets, %d entities, "
-        "%d slas, %d users, %d ticket_users, %d group_users, %d satisfactions",
+        "%d slas, %d users, %d ticket_users, %d group_users, %d satisfactions, %d categories",
         len(tickets), len(groups), len(group_tickets), len(entities),
-        len(slas), len(users), len(ticket_users), len(group_users), len(satisfactions),
+        len(slas), len(users), len(ticket_users), len(group_users), len(satisfactions), len(categories),
     )
 
     # Build lookup maps
     group_names = {g["id"]: clean_group_name(g["name"]) for g in groups}
     entity_names = {e["id"]: e["name"] for e in entities}
+    category_names = {c["id"]: c.get("completename") or c.get("name") for c in categories}
     user_names = {
         u["id"]: " ".join(filter(None, [u.get("firstname"), u.get("realname")])) or u.get("name", "")
         for u in users
@@ -266,6 +268,9 @@ def fetch_and_write(**_):
             "quarter":      quarter,
             "group":        group,
             "entity":       entity,
+            "category":     category_names.get(ticket.get("itilcategories_id"), "Sans catégorie"),
+            "type":         int(ticket.get("type") or 0) or None,
+            "requester":    requester_map.get(tid, "—"),
             "breached":     breached,
             "hasNoTTO":     not ticket.get("takeintoaccountdate"),
             "resolveMs":    ms_between(date, ticket.get("solvedate")) if status in (5, 6) else None,

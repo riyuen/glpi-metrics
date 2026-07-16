@@ -279,6 +279,7 @@ const availableChartTypes = computed(() => {
   for (const [key, label] of Object.entries(CHART_TYPES)) {
     if (['pie', 'donut'].includes(key) && draft.segmentBy) continue
     if (key === 'techTree' && !(draft.metric === 'mttr' && !isSatisfaction.value)) continue
+    if (key === 'heatmap' && !(draft.dimension === 'group' && !isSatisfaction.value)) continue
     out[key] = label
   }
   return out
@@ -342,6 +343,7 @@ function onMetricChange() {
 
 function onDimensionChange() {
   if (draft.segmentBy === draft.dimension) draft.segmentBy = null
+  if (!availableChartTypes.value[draft.chartType]) draft.chartType = 'bar'
 }
 
 // Keep chartType valid when segment toggles pie/donut away

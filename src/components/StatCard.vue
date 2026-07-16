@@ -16,14 +16,7 @@ defineProps({
 
 <style scoped>
 .stat-card {
-<<<<<<< HEAD
-  background: var(--card-bg);
-  border: 1px solid var(--border);
-  border-radius: 10px;
-  padding: 24px 16px;
-=======
   padding: 20px 28px;
->>>>>>> fafca4e6f978cbf257f9851985ec874a2c0feb62
   text-align: center;
   box-sizing: border-box;
   height: 100%;

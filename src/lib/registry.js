@@ -205,6 +205,7 @@ export const CHART_TYPES = {
   stackedBar: 'Barres empilées',
   table:      'Tableau',
   techTree:   'Arbre par technicien',
+  heatmap:    'Carte de chaleur (groupe × semaine)',
 }
 
 // Maps widget-filter keys → { global activeFilters key, ticket field }
@@ -288,6 +289,7 @@ export const DEFAULT_WIDGETS = [
   { id: 'seed-tto',        kind: 'chart', title: 'TTO moy. par type SLA — {hebdo}', metric: 'tto', dimension: 'period', segmentBy: 'slaTTO', chartType: 'line', filters: {}, span: { col: 6, row: 5 }, options: {} },
   { id: 'seed-mttr',       kind: 'chart', title: 'MTTR par type SLA — {hebdo}', metric: 'mttr', dimension: 'period', segmentBy: 'slaTTR', chartType: 'line', filters: {}, span: { col: 6, row: 5 }, options: {} },
   { id: 'seed-group',      kind: 'chart', title: 'Conformité SLA par groupe', metric: 'count', dimension: 'group', segmentBy: 'compliance', chartType: 'hbar', filters: {}, span: { col: 6, row: 5 }, options: { percent: true } },
+  { id: 'seed-groupHeatmap', kind: 'chart', title: 'Conformité SLA par groupe et semaine', metric: 'count', dimension: 'group', segmentBy: null, chartType: 'heatmap', filters: {}, span: { col: 12, row: 6 }, options: {} },
   { id: 'seed-entities',   kind: 'chart', title: 'Top 10 entités', metric: 'count', dimension: 'entity', segmentBy: null, chartType: 'pie', filters: {}, span: { col: 6, row: 5 }, options: { topN: 10 } },
   { id: 'seed-techTime',   kind: 'chart', title: 'Temps de traitement moy. par technicien', metric: 'mttr', dimension: 'group', segmentBy: null, chartType: 'techTree', filters: {}, span: { col: 6, row: 5 }, options: {} },
 ]

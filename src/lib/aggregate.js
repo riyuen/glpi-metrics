@@ -210,6 +210,20 @@ export function computeWidgetData(widget, ctx) {
     return { kind: 'techTree', groups: buildTechTree(rows), meta: { filterKey: null } }
   }
 
+  // ── SLA compliance heatmap by group × week (special renderer) ─────────────
+  if (widget.chartType === 'heatmap') {
+    const groupWeeks = new Map() // group → { week → { compliant, nonCompliant } }
+    for (const t of rows) {
+      if (!t.group || !t.week) continue
+      if (!groupWeeks.has(t.group)) groupWeeks.set(t.group, {})
+      const weekMap = groupWeeks.get(t.group)
+      if (!weekMap[t.week]) weekMap[t.week] = { compliant: 0, nonCompliant: 0 }
+      weekMap[t.week][t.breached ? 'nonCompliant' : 'compliant']++
+    }
+    const groups = [...groupWeeks.entries()].map(([name, weekMap]) => ({ name, weekMap }))
+    return { kind: 'heatmap', groups, meta: { filterKey: null } }
+  }
+
   // ── Regular chart ──────────────────────────────────────────────────────────
   const dimKey = resolveDimKey(widget.dimension, ctx.period)
   const dim = DIMENSIONS[dimKey]
