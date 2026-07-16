@@ -102,7 +102,7 @@
 </template>
 
 <script setup>
-import { ref, computed, watch } from 'vue'
+import { ref, computed, watch, inject } from 'vue'
 import { STATUS, PRIORITY, GLPI_URL } from '../api/glpi.js'
 
 function openTicket(id) {
@@ -118,9 +118,8 @@ const PRIORITY_COLORS = {
   4: '#f97316', 5: '#ef4444', 6: '#7f1d1d',
 }
 
-const props = defineProps({
-  tickets: { type: Array, default: () => [] },
-})
+const processedTickets = inject('processedTickets')
+const tickets = computed(() => processedTickets?.value ?? [])
 
 // Click-outside directive
 const vClickOutside = {
@@ -140,7 +139,7 @@ const dropdownOpen    = ref(false)
 // All unique group names sorted by total ticket count (unfiltered)
 const allGroupNames = computed(() => {
   const map = {}
-  for (const t of props.tickets) {
+  for (const t of tickets.value) {
     map[t.group] = (map[t.group] ?? 0) + 1
   }
   return Object.entries(map)
@@ -171,17 +170,17 @@ function complianceColor(pct) {
 const currentGroup = computed(() => {
   if (!selectedGroup.value) return null
 
-  let tickets = props.tickets.filter(t => t.group === selectedGroup.value)
+  let grouped = tickets.value.filter(t => t.group === selectedGroup.value)
   if (selectedStatuses.value.length > 0) {
-    tickets = tickets.filter(t => selectedStatuses.value.includes(t.status))
+    grouped = grouped.filter(t => selectedStatuses.value.includes(t.status))
   }
 
-  tickets = [...tickets].sort((a, b) => (b.date ?? '').localeCompare(a.date ?? ''))
+  grouped = [...grouped].sort((a, b) => (b.date ?? '').localeCompare(a.date ?? ''))
 
-  const breachCount = tickets.filter(t => t.breached).length
-  const pct = tickets.length === 0 ? 0 : Math.round(((tickets.length - breachCount) / tickets.length) * 100)
+  const breachCount = grouped.filter(t => t.breached).length
+  const pct = grouped.length === 0 ? 0 : Math.round(((grouped.length - breachCount) / grouped.length) * 100)
 
-  return { name: selectedGroup.value, tickets, breachCount, pct }
+  return { name: selectedGroup.value, tickets: grouped, breachCount, pct }
 })
 </script>
 

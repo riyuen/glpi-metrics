@@ -8,10 +8,32 @@ services:
         VITE_GLPI_USER_TOKEN: ${VITE_GLPI_USER_TOKEN}
         VITE_GLPI_URL: ${VITE_GLPI_URL}
     ports:
-      - "3000:80"
+      - "80:80"
+    volumes:
+      - ${HOME}/glpi-metrics-data:/usr/share/nginx/metrics
     environment:
       # Used by nginx to proxy /glpi-api/* → GLPI server (runtime)
       # Only substitute this variable — leave nginx's own $uri etc. alone
-      NGINX_ENVSUBST_TEMPLATE_VARS: "$${GLPI_URL}"
+      NGINX_ENVSUBST_TEMPLATE_VARS: "GLPI_URL"
       GLPI_URL: ${VITE_GLPI_URL}
     restart: unless-stopped
+
+  airflow:
+    image: apache/airflow:2.9.0-python3.11
+    command: standalone
+    environment:
+      AIRFLOW__CORE__LOAD_EXAMPLES: "false"
+      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: sqlite:////opt/airflow/airflow.db
+      GLPI_URL: ${VITE_GLPI_URL}
+      GLPI_APP_TOKEN: ${VITE_GLPI_APP_TOKEN}
+      GLPI_USER_TOKEN: ${VITE_GLPI_USER_TOKEN}
+    volumes:
+      - ./airflow/dags:/opt/airflow/dags
+      - ${HOME}/glpi-metrics-data:/data
+      - airflow-home:/opt/airflow
+    ports:
+      - "8080:8080"
+    restart: unless-stopped
+
+volumes:
+  airflow-home:

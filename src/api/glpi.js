@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 const APP_TOKEN = import.meta.env.VITE_GLPI_APP_TOKEN
 const USER_TOKEN = import.meta.env.VITE_GLPI_USER_TOKEN
 
@@ -9,9 +10,10 @@ const USE_MOCK = import.meta.env.VITE_MOCK_DATA === 'true'
 const BASE = '/glpi-api/apirest.php'
 
 // Base URL of the GLPI web UI — used to build ticket links
+=======
+>>>>>>> fafca4e6f978cbf257f9851985ec874a2c0feb62
 export const GLPI_URL = (import.meta.env.VITE_GLPI_URL ?? '').replace(/\/$/, '')
 
-// GLPI ticket status codes
 export const STATUS = {
   1: 'Nouveau',
   2: 'En cours',
@@ -21,7 +23,6 @@ export const STATUS = {
   6: 'Clôturé',
 }
 
-// GLPI priority codes
 export const PRIORITY = {
   1: 'Très faible',
   2: 'Faible',
@@ -31,6 +32,7 @@ export const PRIORITY = {
   6: 'Majeur',
 }
 
+<<<<<<< HEAD
 // GLPI ticket type codes
 export const TYPE = {
   1: 'Incident',
@@ -290,11 +292,18 @@ async function getCachedEntityNames(sessionToken) {
   )
   _entityNamesExp = Date.now() + STATIC_TTL
   return _entityNames
+=======
+export async function fetchMetrics() {
+  const res = await fetch('/api/metrics.json', { cache: 'no-store' })
+  if (!res.ok) throw new Error(`Metrics unavailable: ${res.status}`)
+  return res.json()
+>>>>>>> fafca4e6f978cbf257f9851985ec874a2c0feb62
 }
 
 let _mockTickets = null
 
 export async function fetchSatisfaction() {
+<<<<<<< HEAD
   if (USE_MOCK) {
     const { generateMockTickets, generateMockSatisfaction } = await import('./mock.js')
     _mockTickets ??= generateMockTickets()
@@ -513,4 +522,9 @@ export async function fetchMetrics() {
       throw err
     }
   }
+=======
+  const res = await fetch('/api/satisfaction.json', { cache: 'no-store' })
+  if (!res.ok) throw new Error(`Satisfaction unavailable: ${res.status}`)
+  return res.json()
+>>>>>>> fafca4e6f978cbf257f9851985ec874a2c0feb62
 }

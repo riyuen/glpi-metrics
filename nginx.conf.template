@@ -8,6 +8,12 @@ server {
         try_files $uri $uri/ /index.html;
     }
 
+    # Serve pre-fetched metrics JSON written by Airflow
+    location /api/ {
+        alias /usr/share/nginx/metrics/;
+        add_header Cache-Control "no-store";
+    }
+
     # Proxy GLPI API calls — avoids CORS from the browser
     # GLPI_URL is injected at container start via envsubst
     location /glpi-api/ {
