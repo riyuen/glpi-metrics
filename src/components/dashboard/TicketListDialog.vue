@@ -4,6 +4,7 @@
       <div class="dialog-header">
         <h3 class="dialog-title">{{ title }}</h3>
         <span class="total-badge">{{ tickets.length }} ticket{{ tickets.length === 1 ? '' : 's' }}</span>
+        <button v-if="tickets.length > 0" class="export-btn" @click="exportCSV">📥 CSV</button>
         <button class="close-btn" title="Fermer" @click="emit('close')">✕</button>
       </div>
 
@@ -57,7 +58,7 @@
 import { GLPI_URL, STATUS, PRIORITY } from '../../api/glpi.js'
 import { STATUS_COLORS, PRIORITY_COLORS } from '../../lib/registry.js'
 
-defineProps({
+const props = defineProps({
   tickets: { type: Array, default: () => [] },
   title: { type: String, default: 'Tickets' },
 })
@@ -65,6 +66,29 @@ const emit = defineEmits(['close'])
 
 function openTicket(id) {
   window.open(`${GLPI_URL}/front/ticket.form.php?id=${id}`, '_blank', 'noopener')
+}
+
+function exportCSV() {
+  const headers = ['ID', 'Titre', 'Statut', 'Priorité', 'Groupe', 'Ouverture', 'Lien']
+  const rows = props.tickets.map(t => [
+    t.id,
+    t.name || '—',
+    STATUS[t.status] ?? `Status ${t.status}`,
+    PRIORITY[t.priority] ?? `Priorité ${t.priority}`,
+    t.group ?? '—',
+    t.date?.substring(0, 10) ?? '—',
+    `${GLPI_URL}/front/ticket.form.php?id=${t.id}`,
+  ])
+
+  const csv = [headers, ...rows]
+    .map(row => row.map(cell => `"${String(cell).replace(/"/g, '""')}"`).join(','))
+    .join('\n')
+
+  const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8;' })
+  const link = document.createElement('a')
+  link.href = URL.createObjectURL(blob)
+  link.download = `${props.title.replace(/[^\w\-]+/g, '_')}-${new Date().toISOString().split('T')[0]}.csv`
+  link.click()
 }
 </script>
 
@@ -115,6 +139,23 @@ function openTicket(id) {
   color: var(--text-muted);
   white-space: nowrap;
 }
+.export-btn {
+  background: color-mix(in srgb, var(--accent) 15%, transparent);
+  border: 1px solid color-mix(in srgb, var(--accent) 30%, transparent);
+  color: var(--accent);
+  border-radius: 20px;
+  padding: 2px 12px;
+  font-size: 0.78rem;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all 0.15s;
+}
+.export-btn:hover {
+  background: color-mix(in srgb, var(--accent) 25%, transparent);
+  border-color: color-mix(in srgb, var(--accent) 50%, transparent);
+}
+
 .close-btn {
   background: none;
   border: none;
