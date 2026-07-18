@@ -5,7 +5,7 @@
 //   activeFilters — { statuses, priorities, groups, entities, compliance, periods }
 //   period       — 'week' | 'month' (global toggle)
 import {
-  METRICS, DIMENSIONS, CATEGORICAL_PALETTE, WIDGET_FILTER_DEFS,
+  METRICS, DIMENSIONS, CATEGORICAL_PALETTE, WIDGET_FILTER_DEFS, buildCustomDimension,
 } from './registry.js'
 import { toISOWeek } from '../api/glpi.js'
 
@@ -257,7 +257,7 @@ export function computeWidgetData(widget, ctx) {
 
   // ── Regular chart ──────────────────────────────────────────────────────────
   const dimKey = resolveDimKey(widget.dimension, ctx.period)
-  const dim = DIMENSIONS[dimKey]
+  const dim = dimKey === 'custom' ? buildCustomDimension(widget.customGroups) : DIMENSIONS[dimKey]
   const source = metric.source
   const accessor = dim ? accessorFor(dim, source) : null
   if (!dim || !accessor) return { kind: 'empty' }
@@ -297,8 +297,8 @@ export function computeWidgetData(widget, ctx) {
   }
 
   // ── Segmented (stacked / multi-series) ─────────────────────────────────────
-  if (widget.segmentBy && DIMENSIONS[widget.segmentBy]) {
-    const segDim = DIMENSIONS[widget.segmentBy]
+  if (widget.segmentBy && (widget.segmentBy === 'custom' || DIMENSIONS[widget.segmentBy])) {
+    const segDim = widget.segmentBy === 'custom' ? buildCustomDimension(widget.customGroups) : DIMENSIONS[widget.segmentBy]
     const segAccessor = accessorFor(segDim, source)
     const segBuckets = bucketBy(rows, segAccessor)
     const segValues = orderValues(segBuckets, segDim)

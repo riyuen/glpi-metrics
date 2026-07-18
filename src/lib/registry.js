@@ -196,6 +196,47 @@ export const DIMENSIONS = {
   },
 }
 
+// Field getters for user-defined custom groups (keys match WidgetEditor.vue's
+// SEARCH_FIELD_OPTIONS). Satisfaction records only carry requester/technician,
+// so name/category rules simply never match satisfaction-sourced widgets.
+const CUSTOM_GROUP_FIELD_ACCESSORS = {
+  name:      { ticket: t => t.name,      sat: null },
+  category:  { ticket: t => t.category,  sat: null },
+  requester: { ticket: t => t.requester, sat: r => r.requester },
+  techName:  { ticket: t => t.techName,  sat: r => r.technician },
+}
+
+// Builds a DIMENSIONS-shaped object from a widget's user-defined match rules
+// (each { label, field, query }). A row falls into the first rule whose field
+// contains query (case-insensitive); unmatched rows go to 'Autre'.
+export function buildCustomDimension(rules = []) {
+  const validRules = (rules ?? []).filter(r => r.label?.trim() && r.query?.trim())
+  const OTHER = 'Autre'
+
+  function matchRow(row, source) {
+    if (!validRules.length) return null
+    for (const rule of validRules) {
+      const fa = CUSTOM_GROUP_FIELD_ACCESSORS[rule.field]
+      const getter = source === 'tickets' ? fa?.ticket : fa?.sat
+      if (!getter) continue
+      const value = getter(row)
+      if (value != null && String(value).toLowerCase().includes(rule.query.trim().toLowerCase())) {
+        return rule.label.trim()
+      }
+    }
+    return OTHER
+  }
+
+  return {
+    label: 'Personnalisé',
+    accessor: t => matchRow(t, 'tickets'),
+    satAccessor: r => matchRow(r, 'satisfaction'),
+    valueLabel: v => v,
+    fixedOrder: validRules.length ? [...new Set(validRules.map(r => r.label.trim()))].concat(OTHER) : undefined,
+    filterKey: null,
+  }
+}
+
 export const CHART_TYPES = {
   bar:        'Barres',
   hbar:       'Barres horizontales',
@@ -230,12 +271,20 @@ export function autoTitle(widget, period = 'week') {
   const metric = METRICS[widget.metric]
   if (!metric) return 'Widget'
   if (widget.kind === 'stat' || !widget.dimension) return metric.label
-  const dimKey = widget.dimension === 'period'
-    ? DIMENSIONS.period.resolvesTo(period)
-    : widget.dimension
-  const dim = DIMENSIONS[dimKey]
-  let title = `${metric.label} par ${dim?.label?.toLowerCase() ?? dimKey}`
-  if (widget.segmentBy && DIMENSIONS[widget.segmentBy]) {
+  let dimLabel
+  if (widget.dimension === 'custom') {
+    dimLabel = 'personnalisé'
+  } else {
+    const dimKey = widget.dimension === 'period'
+      ? DIMENSIONS.period.resolvesTo(period)
+      : widget.dimension
+    const dim = DIMENSIONS[dimKey]
+    dimLabel = dim?.label?.toLowerCase() ?? dimKey
+  }
+  let title = `${metric.label} par ${dimLabel}`
+  if (widget.segmentBy === 'custom') {
+    title += ' — Personnalisé'
+  } else if (widget.segmentBy && DIMENSIONS[widget.segmentBy]) {
     title += ` — ${DIMENSIONS[widget.segmentBy].label}`
   }
   return title

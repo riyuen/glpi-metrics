@@ -30,6 +30,7 @@
             <label class="field-label">Regrouper par</label>
             <select v-model="draft.dimension" class="field-select" @change="onDimensionChange">
               <option v-for="(d, key) in availableDimensions" :key="key" :value="key">{{ d.label }}</option>
+              <option value="custom">Personnalisé</option>
             </select>
           </div>
 
@@ -39,7 +40,23 @@
             <select v-model="draft.segmentBy" class="field-select">
               <option :value="null">Aucune</option>
               <option v-for="(d, key) in availableSegments" :key="key" :value="key">{{ d.label }}</option>
+              <option value="custom">Personnalisé</option>
             </select>
+          </div>
+
+          <!-- Custom groups (used when dimension and/or segment is "Personnalisé") -->
+          <div v-if="showCustomGroups" class="field">
+            <label class="field-label">Groupes personnalisés</label>
+            <div v-for="(g, i) in draft.customGroups" :key="i" class="search-row">
+              <input v-model="g.label" type="text" class="field-input custom-group-label" placeholder="Nom du groupe" />
+              <select v-model="g.field" class="field-select search-field-select">
+                <option v-for="(label, key) in SEARCH_FIELD_OPTIONS" :key="key" :value="key">{{ label }}</option>
+              </select>
+              <input v-model="g.query" type="text" class="field-input" placeholder="Contient…" />
+              <button type="button" class="remove-search-btn" title="Retirer" @click="removeCustomGroup(i)">×</button>
+            </div>
+            <button type="button" class="add-search-btn" @click="addCustomGroup">+ Ajouter un groupe</button>
+            <p class="field-hint">Un ticket est classé dans le premier groupe dont le champ contient le texte indiqué ; les autres vont dans « Autre ».</p>
           </div>
 
           <!-- Chart type -->
@@ -220,6 +237,7 @@ const clone = (o) => JSON.parse(JSON.stringify(o))
 const draft = reactive(props.widget ? clone(props.widget) : emptyWidget('chart'))
 draft.filters = draft.filters ?? {}
 draft.options = draft.options ?? {}
+draft.customGroups = draft.customGroups ?? []
 
 // v-model proxies for filters/options (kept null-free in the saved widget)
 const mkArrayFilter = (key) => computed({
@@ -352,6 +370,20 @@ const groupOptions    = computed(() => distincts.value.groups.map((g) => ({ valu
 const entityOptions   = computed(() => distincts.value.entities.map((e) => ({ value: e, label: e })))
 const categoryOptions = computed(() => distincts.value.categories.map((c) => ({ value: c, label: c })))
 
+const showCustomGroups = computed(() => draft.dimension === 'custom' || draft.segmentBy === 'custom')
+
+function addCustomGroup() {
+  draft.customGroups.push({ label: '', field: 'name', query: '' })
+}
+function removeCustomGroup(i) {
+  draft.customGroups.splice(i, 1)
+}
+
+// Seed a first empty rule the first time the custom-groups section appears
+watch(showCustomGroups, (shown) => {
+  if (shown && draft.customGroups.length === 0) addCustomGroup()
+})
+
 function setKind(kind) {
   draft.kind = kind
   if (kind === 'stat') {
@@ -364,10 +396,10 @@ function setKind(kind) {
 
 function onMetricChange() {
   // Reset choices that don't exist for the new metric's source
-  if (draft.kind === 'chart' && draft.dimension && !availableDimensions.value[draft.dimension]) {
+  if (draft.kind === 'chart' && draft.dimension && draft.dimension !== 'custom' && !availableDimensions.value[draft.dimension]) {
     draft.dimension = isSatisfaction.value ? 'group' : 'status'
   }
-  if (draft.segmentBy && !availableSegments.value[draft.segmentBy]) draft.segmentBy = null
+  if (draft.segmentBy && draft.segmentBy !== 'custom' && !availableSegments.value[draft.segmentBy]) draft.segmentBy = null
   if (!availableChartTypes.value[draft.chartType]) draft.chartType = 'bar'
   if (isSatisfaction.value) {
     // Drop ticket-only filters
@@ -391,7 +423,7 @@ watch(() => draft.segmentBy, () => {
 
 const isValid = computed(() =>
   METRICS[draft.metric] != null &&
-  (draft.kind === 'stat' || DIMENSIONS[draft.dimension] != null)
+  (draft.kind === 'stat' || draft.dimension === 'custom' || DIMENSIONS[draft.dimension] != null)
 )
 
 const autoTitlePlaceholder = computed(() => autoTitle(draft, period.value))
