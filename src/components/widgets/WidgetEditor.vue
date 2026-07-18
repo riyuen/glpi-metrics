@@ -62,55 +62,31 @@
             <template v-if="!isSatisfaction">
               <div class="field">
                 <label class="field-label">Statut</label>
-                <div class="check-grid">
-                  <label v-for="(label, code) in STATUS" :key="code" class="check-item">
-                    <input type="checkbox" :value="Number(code)" v-model="filterStatus" /> {{ label }}
-                  </label>
-                </div>
+                <MultiSelectDropdown v-model="filterStatus" :options="statusOptions" />
               </div>
               <div class="field">
                 <label class="field-label">Priorité</label>
-                <div class="check-grid">
-                  <label v-for="(label, code) in PRIORITY" :key="code" class="check-item">
-                    <input type="checkbox" :value="Number(code)" v-model="filterPriority" /> {{ label }}
-                  </label>
-                </div>
+                <MultiSelectDropdown v-model="filterPriority" :options="priorityOptions" />
               </div>
               <div class="field">
                 <label class="field-label">Type</label>
-                <div class="check-grid">
-                  <label v-for="(label, code) in TYPE" :key="code" class="check-item">
-                    <input type="checkbox" :value="Number(code)" v-model="filterType" /> {{ label }}
-                  </label>
-                </div>
+                <MultiSelectDropdown v-model="filterType" :options="typeOptions" />
               </div>
             </template>
 
             <div class="field">
               <label class="field-label">Groupe</label>
-              <div class="check-grid scroll">
-                <label v-for="g in distincts.groups" :key="g" class="check-item">
-                  <input type="checkbox" :value="g" v-model="filterGroup" /> {{ g }}
-                </label>
-              </div>
+              <MultiSelectDropdown v-model="filterGroup" :options="groupOptions" />
             </div>
 
             <template v-if="!isSatisfaction">
               <div class="field">
                 <label class="field-label">Entité</label>
-                <div class="check-grid scroll">
-                  <label v-for="e in distincts.entities" :key="e" class="check-item">
-                    <input type="checkbox" :value="e" v-model="filterEntity" /> {{ e }}
-                  </label>
-                </div>
+                <MultiSelectDropdown v-model="filterEntity" :options="entityOptions" />
               </div>
               <div class="field">
                 <label class="field-label">Catégorie</label>
-                <div class="check-grid scroll">
-                  <label v-for="c in distincts.categories" :key="c" class="check-item">
-                    <input type="checkbox" :value="c" v-model="filterCategory" /> {{ c }}
-                  </label>
-                </div>
+                <MultiSelectDropdown v-model="filterCategory" :options="categoryOptions" />
               </div>
               <div class="field">
                 <label class="field-label">Conformité SLA</label>
@@ -221,6 +197,7 @@
 <script setup>
 import { ref, computed, reactive, watch } from 'vue'
 import WidgetRenderer from './WidgetRenderer.vue'
+import MultiSelectDropdown from '../common/MultiSelectDropdown.vue'
 import { computeWidgetData } from '../../lib/aggregate.js'
 import { METRICS, DIMENSIONS, CHART_TYPES, autoTitle, emptyWidget, newWidgetId } from '../../lib/registry.js'
 import { STATUS, PRIORITY, TYPE } from '../../api/glpi.js'
@@ -367,6 +344,13 @@ const distincts = computed(() => {
     categories: [...categories].sort(sortFr),
   }
 })
+
+const statusOptions   = computed(() => Object.entries(STATUS).map(([code, label]) => ({ value: Number(code), label })))
+const priorityOptions = computed(() => Object.entries(PRIORITY).map(([code, label]) => ({ value: Number(code), label })))
+const typeOptions     = computed(() => Object.entries(TYPE).map(([code, label]) => ({ value: Number(code), label })))
+const groupOptions    = computed(() => distincts.value.groups.map((g) => ({ value: g, label: g })))
+const entityOptions   = computed(() => distincts.value.entities.map((e) => ({ value: e, label: e })))
+const categoryOptions = computed(() => distincts.value.categories.map((c) => ({ value: c, label: c })))
 
 function setKind(kind) {
   draft.kind = kind
@@ -584,17 +568,6 @@ function save() {
   margin-left: 6px;
 }
 
-.check-grid {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 4px 14px;
-}
-.check-grid.scroll {
-  max-height: 130px;
-  overflow-y: auto;
-  scrollbar-width: thin;
-  scrollbar-color: var(--border) transparent;
-}
 .check-item {
   display: flex;
   align-items: center;
