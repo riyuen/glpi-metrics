@@ -17,7 +17,7 @@
     <div class="widget-toolbar">
       <button class="tool-btn" title="Modifier" @click.stop="emit('edit')">✎</button>
       <button class="tool-btn" title="Dupliquer" @click.stop="emit('duplicate')">⧉</button>
-      <button v-if="widget.kind === 'stat'" class="tool-btn" title="Voir les tickets" @click.stop="emit('view-tickets')">☰</button>
+      <button class="tool-btn" title="Voir les tickets" @click.stop="emit('view-tickets')">☰</button>
       <button class="tool-btn tool-danger" title="Supprimer" @click.stop="emit('remove')">✕</button>
     </div>
 
