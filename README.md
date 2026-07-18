@@ -44,11 +44,10 @@ The app is served on **port 80**. Point your domain's DNS A record at the server
 ```
 Browser → nginx (port 80)
             ├── /           → Vue SPA (built static files)
-            ├── /api/       → pre-fetched JSON written by Airflow
-            └── /glpi-api/  → reverse proxy to GLPI REST API (avoids CORS)
+            └── /api/       → pre-fetched JSON written by Airflow
 ```
 
-The GLPI URL is injected at container start via `envsubst` — the built JS bundle does not contain it.
+`VITE_GLPI_URL` is baked into the built JS bundle at build time (Vite inlines `import.meta.env.VITE_GLPI_URL` — see `src/api/glpi.js`). It's used only to build deep-links back to GLPI tickets (`${GLPI_URL}/front/ticket.form.php?id=…`) in `TicketListDialog.vue`, `Satisfaction.vue`, `UnacknowledgedTickets.vue`, and `TicketsByGroup.vue` — the frontend never calls the GLPI REST API directly or through a proxy; it only reads pre-fetched `/api/metrics.json` / `/api/satisfaction.json` written by Airflow.
 
 ## Development
 

@@ -4,16 +4,16 @@ FROM node:18-alpine AS builder
 WORKDIR /app
 
 COPY package*.json ./
+# SECURITY TRADEOFF: disables TLS certificate verification for this npm install only
+# (corporate proxy / SSL-inspection environments). Deliberate, documented choice —
+# see README.md "Notes". Remove --strict-ssl=false if your build environment doesn't
+# require SSL inspection, to restore full certificate verification.
 RUN npm ci --strict-ssl=false
 
 COPY . .
 
-# These are baked into the JS bundle at build time
-ARG VITE_GLPI_APP_TOKEN
-ARG VITE_GLPI_USER_TOKEN
+# Baked into the JS bundle at build time
 ARG VITE_GLPI_URL
-ENV VITE_GLPI_APP_TOKEN=$VITE_GLPI_APP_TOKEN
-ENV VITE_GLPI_USER_TOKEN=$VITE_GLPI_USER_TOKEN
 ENV VITE_GLPI_URL=$VITE_GLPI_URL
 
 RUN npm run build
@@ -23,7 +23,6 @@ FROM nginx:1.27-alpine
 
 COPY --from=builder /app/dist /usr/share/nginx/html
 
-# nginx template — GLPI_URL is substituted at container start
 COPY nginx.conf.template /etc/nginx/templates/default.conf.template
 
 EXPOSE 80

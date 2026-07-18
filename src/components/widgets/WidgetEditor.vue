@@ -45,19 +45,11 @@
           </div>
 
           <!-- Custom groups (used when dimension and/or segment is "Personnalisé") -->
-          <div v-if="showCustomGroups" class="field">
-            <label class="field-label">Groupes personnalisés</label>
-            <div v-for="(g, i) in draft.customGroups" :key="i" class="search-row">
-              <input v-model="g.label" type="text" class="field-input custom-group-label" placeholder="Nom du groupe" />
-              <select v-model="g.field" class="field-select search-field-select">
-                <option v-for="(label, key) in SEARCH_FIELD_OPTIONS" :key="key" :value="key">{{ label }}</option>
-              </select>
-              <input v-model="g.query" type="text" class="field-input" placeholder="Contient…" />
-              <button type="button" class="remove-search-btn" title="Retirer" @click="removeCustomGroup(i)">×</button>
-            </div>
-            <button type="button" class="add-search-btn" @click="addCustomGroup">+ Ajouter un groupe</button>
-            <p class="field-hint">Un ticket est classé dans le premier groupe dont le champ contient le texte indiqué ; les autres vont dans « Autre ».</p>
-          </div>
+          <CustomGroupsEditor
+            v-if="showCustomGroups"
+            :custom-groups="draft.customGroups"
+            :search-field-options="SEARCH_FIELD_OPTIONS"
+          />
 
           <!-- Chart type -->
           <div v-if="draft.kind === 'chart'" class="field">
@@ -73,80 +65,17 @@
           </div>
 
           <!-- Widget filters -->
-          <details class="filters-details">
-            <summary>Filtres du widget (facultatif) <span v-if="activeFilterCount" class="filter-badge">{{ activeFilterCount }}</span></summary>
-
-            <template v-if="!isSatisfaction">
-              <div class="field">
-                <label class="field-label">Statut</label>
-                <MultiSelectDropdown v-model="filterStatus" :options="statusOptions" />
-              </div>
-              <div class="field">
-                <label class="field-label">Priorité</label>
-                <MultiSelectDropdown v-model="filterPriority" :options="priorityOptions" />
-              </div>
-              <div class="field">
-                <label class="field-label">Type</label>
-                <MultiSelectDropdown v-model="filterType" :options="typeOptions" />
-              </div>
-            </template>
-
-            <div class="field">
-              <label class="field-label">Groupe</label>
-              <MultiSelectDropdown v-model="filterGroup" :options="groupOptions" />
-            </div>
-
-            <template v-if="!isSatisfaction">
-              <div class="field">
-                <label class="field-label">Entité</label>
-                <MultiSelectDropdown v-model="filterEntity" :options="entityOptions" />
-              </div>
-              <div class="field">
-                <label class="field-label">Catégorie</label>
-                <MultiSelectDropdown v-model="filterCategory" :options="categoryOptions" />
-              </div>
-              <div class="field">
-                <label class="field-label">Conformité SLA</label>
-                <div class="chip-row">
-                  <button :class="{ active: !draft.filters.compliance }" @click="draft.filters.compliance = null">Tous</button>
-                  <button :class="{ active: draft.filters.compliance === 'compliant' }" @click="draft.filters.compliance = 'compliant'">Conformes</button>
-                  <button :class="{ active: draft.filters.compliance === 'nonCompliant' }" @click="draft.filters.compliance = 'nonCompliant'">Non conformes</button>
-                </div>
-              </div>
-              <div class="field">
-                <label class="field-label">Recherche</label>
-                <div v-for="(clause, i) in (draft.filters.searches || [])" :key="i" class="search-row">
-                  <select v-if="i > 0" v-model="clause.link" class="field-select search-link-select">
-                    <option value="AND">ET</option>
-                    <option value="OR">OU</option>
-                    <option value="ANDNOT">ET NON</option>
-                    <option value="ORNOT">OU NON</option>
-                  </select>
-                  <span v-else class="search-link-spacer" />
-                  <select v-model="clause.field" class="field-select search-field-select">
-                    <option v-for="(label, key) in SEARCH_FIELD_OPTIONS" :key="key" :value="key">{{ label }}</option>
-                  </select>
-                  <input v-model="clause.query" type="text" class="field-input" placeholder="Rechercher…" />
-                  <button type="button" class="remove-search-btn" title="Retirer" @click="removeSearchClause(i)">×</button>
-                </div>
-                <button type="button" class="add-search-btn" @click="addSearchClause">+ Ajouter une recherche</button>
-              </div>
-            </template>
-
-            <div class="field">
-              <label class="field-label">Période</label>
-              <div class="date-row">
-                <label class="date-field">
-                  <span>Du</span>
-                  <input v-model="dateFromDraft" type="date" class="field-input" :max="dateToDraft || undefined" />
-                </label>
-                <label class="date-field">
-                  <span>Au</span>
-                  <input v-model="dateToDraft" type="date" class="field-input" :min="dateFromDraft || undefined" />
-                </label>
-              </div>
-            </div>
-          </details>
+          <WidgetFilterFields
+            :filters="draft.filters"
+            :is-satisfaction="isSatisfaction"
+            :status-options="statusOptions"
+            :priority-options="priorityOptions"
+            :type-options="typeOptions"
+            :group-options="groupOptions"
+            :entity-options="entityOptions"
+            :category-options="categoryOptions"
+            :search-field-options="SEARCH_FIELD_OPTIONS"
+          />
 
           <!-- Options -->
           <div class="field">
@@ -214,7 +143,8 @@
 <script setup>
 import { ref, computed, reactive, watch } from 'vue'
 import WidgetRenderer from './WidgetRenderer.vue'
-import MultiSelectDropdown from '../common/MultiSelectDropdown.vue'
+import WidgetFilterFields from './WidgetFilterFields.vue'
+import CustomGroupsEditor from './CustomGroupsEditor.vue'
 import { computeWidgetData } from '../../lib/aggregate.js'
 import { METRICS, DIMENSIONS, CHART_TYPES, autoTitle, emptyWidget, newWidgetId } from '../../lib/registry.js'
 import { STATUS, PRIORITY, TYPE } from '../../api/glpi.js'
@@ -239,36 +169,8 @@ draft.filters = draft.filters ?? {}
 draft.options = draft.options ?? {}
 draft.customGroups = draft.customGroups ?? []
 
-// v-model proxies for filters/options (kept null-free in the saved widget)
-const mkArrayFilter = (key) => computed({
-  get: () => draft.filters[key] ?? [],
-  set: (v) => { if (v.length) draft.filters[key] = v; else delete draft.filters[key] },
-})
-const filterStatus   = mkArrayFilter('status')
-const filterPriority = mkArrayFilter('priority')
-const filterType     = mkArrayFilter('type')
-const filterGroup    = mkArrayFilter('group')
-const filterEntity   = mkArrayFilter('entity')
-const filterCategory = mkArrayFilter('category')
-
-const dateFromDraft = computed({
-  get: () => draft.filters.dateFrom ?? '',
-  set: (v) => { if (v) draft.filters.dateFrom = v; else delete draft.filters.dateFrom },
-})
-const dateToDraft = computed({
-  get: () => draft.filters.dateTo ?? '',
-  set: (v) => { if (v) draft.filters.dateTo = v; else delete draft.filters.dateTo },
-})
+// Shared with WidgetFilterFields (search clauses) and CustomGroupsEditor (custom-group rules)
 const SEARCH_FIELD_OPTIONS = { name: 'Titre', category: 'Catégorie', requester: 'Demandeur', techName: 'Technicien' }
-
-function addSearchClause() {
-  if (!draft.filters.searches) draft.filters.searches = []
-  draft.filters.searches.push({ field: 'name', query: '', link: 'AND' })
-}
-function removeSearchClause(i) {
-  draft.filters.searches.splice(i, 1)
-  if (draft.filters.searches.length === 0) delete draft.filters.searches
-}
 
 const titleDraft = computed({
   get: () => draft.title ?? '',
@@ -335,18 +237,6 @@ const canPercent = computed(() =>
   draft.kind === 'chart' && draft.segmentBy && ['stackedBar', 'hbar'].includes(draft.chartType)
 )
 
-const activeFilterCount = computed(() => {
-  const f = draft.filters
-  let n = 0
-  for (const k of ['status', 'priority', 'type', 'group', 'entity', 'category']) {
-    if (f[k]?.length) n++
-  }
-  if (f.compliance) n++
-  if (f.dateFrom || f.dateTo) n++
-  if (f.searches?.length) n += f.searches.filter(c => c.query?.trim()).length
-  return n
-})
-
 // Distinct filter values from the loaded tickets
 const distincts = computed(() => {
   const groups = new Set(), entities = new Set(), categories = new Set()
@@ -372,16 +262,9 @@ const categoryOptions = computed(() => distincts.value.categories.map((c) => ({ 
 
 const showCustomGroups = computed(() => draft.dimension === 'custom' || draft.segmentBy === 'custom')
 
-function addCustomGroup() {
-  draft.customGroups.push({ label: '', field: 'name', query: '' })
-}
-function removeCustomGroup(i) {
-  draft.customGroups.splice(i, 1)
-}
-
 // Seed a first empty rule the first time the custom-groups section appears
 watch(showCustomGroups, (shown) => {
-  if (shown && draft.customGroups.length === 0) addCustomGroup()
+  if (shown && draft.customGroups.length === 0) draft.customGroups.push({ label: '', field: 'name', query: '' })
 })
 
 function setKind(kind) {
@@ -576,30 +459,6 @@ function save() {
   font-weight: 600;
 }
 
-.filters-details {
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  padding: 10px 14px;
-  margin-bottom: 14px;
-}
-.filters-details summary {
-  cursor: pointer;
-  font-size: 0.82rem;
-  font-weight: 600;
-  color: var(--text-muted);
-  user-select: none;
-}
-.filters-details[open] summary { margin-bottom: 12px; }
-.filter-badge {
-  display: inline-block;
-  background: var(--accent);
-  color: #0f172a;
-  border-radius: 10px;
-  font-size: 0.7rem;
-  padding: 1px 7px;
-  margin-left: 6px;
-}
-
 .check-item {
   display: flex;
   align-items: center;
@@ -617,44 +476,6 @@ function save() {
   gap: 16px;
   flex-wrap: wrap;
   align-items: flex-start;
-}
-
-.search-row { display: flex; gap: 8px; margin-bottom: 6px; }
-.search-link-select { flex: 0 0 90px; }
-.search-link-spacer { flex: 0 0 90px; }
-.search-field-select { flex: 0 0 140px; }
-.search-row .field-input { flex: 1; }
-.remove-search-btn {
-  background: none;
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  color: var(--text-muted);
-  font-size: 14px;
-  line-height: 1;
-  padding: 0 10px;
-  cursor: pointer;
-  flex-shrink: 0;
-}
-.remove-search-btn:hover { border-color: #ef4444; color: #ef4444; }
-.add-search-btn {
-  background: none;
-  border: 1px dashed var(--border);
-  border-radius: 6px;
-  color: var(--text-muted);
-  font-size: 0.78rem;
-  padding: 5px 10px;
-  cursor: pointer;
-}
-.add-search-btn:hover { border-color: var(--accent); color: var(--accent); }
-
-.date-row { display: flex; gap: 8px; }
-.date-field {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  flex: 1;
-  font-size: 0.72rem;
-  color: var(--text-muted);
 }
 
 .color-row { display: flex; align-items: center; gap: 8px; }

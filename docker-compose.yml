@@ -4,8 +4,6 @@ services:
       context: .
       args:
         # Baked into the JS bundle at build time
-        VITE_GLPI_APP_TOKEN: ${VITE_GLPI_APP_TOKEN}
-        VITE_GLPI_USER_TOKEN: ${VITE_GLPI_USER_TOKEN}
         VITE_GLPI_URL: ${VITE_GLPI_URL}
     ports:
       - "80:80"
