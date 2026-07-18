@@ -35,26 +35,12 @@ export function applyGlobalFilters(rows, activeFilters, { skip = new Set(), sour
       if (activeFilters.compliance === 'compliant')    ts = ts.filter(t => !t.breached)
       if (activeFilters.compliance === 'nonCompliant') ts = ts.filter(t => t.breached)
     }
-    const query = activeFilters.searchQuery?.trim().toLowerCase()
-    if (!skip.has('search') && query) {
-      const field = activeFilters.searchField || 'name'
-      ts = ts.filter(t => (t[field] ?? '').toString().toLowerCase().includes(query))
-    }
   } else {
     // Satisfaction records only carry group + date — other global filters don't apply
     if (!skip.has('groups') && activeFilters.groups.length) ts = ts.filter(r => activeFilters.groups.includes(r.group))
   }
   if (!skip.has('periods') && activeFilters.periods.length) {
     ts = ts.filter(r => activeFilters.periods.includes(periodLabelOf(r, source, period)))
-  }
-  if (activeFilters.dateFrom || activeFilters.dateTo) {
-    ts = ts.filter(r => {
-      if (!r.date) return false
-      const day = r.date.slice(0, 10)
-      if (activeFilters.dateFrom && day < activeFilters.dateFrom) return false
-      if (activeFilters.dateTo && day > activeFilters.dateTo) return false
-      return true
-    })
   }
   return ts
 }
@@ -73,8 +59,22 @@ export function applyWidgetFilters(rows, filters, source = 'tickets') {
     if (filters.compliance === 'compliant')    ts = ts.filter(t => !t.breached)
     if (filters.compliance === 'nonCompliant') ts = ts.filter(t => t.breached)
     if (filters.hasNoTTO === true) ts = ts.filter(t => t.hasNoTTO)
+    const query = filters.searchQuery?.trim().toLowerCase()
+    if (query) {
+      const field = filters.searchField || 'name'
+      ts = ts.filter(t => (t[field] ?? '').toString().toLowerCase().includes(query))
+    }
   } else {
     if (filters.group?.length) ts = ts.filter(r => filters.group.includes(r.group))
+  }
+  if (filters.dateFrom || filters.dateTo) {
+    ts = ts.filter(r => {
+      if (!r.date) return false
+      const day = r.date.slice(0, 10)
+      if (filters.dateFrom && day < filters.dateFrom) return false
+      if (filters.dateTo && day > filters.dateTo) return false
+      return true
+    })
   }
   return ts
 }

@@ -120,7 +120,30 @@
                   <button :class="{ active: draft.filters.compliance === 'nonCompliant' }" @click="draft.filters.compliance = 'nonCompliant'">Non conformes</button>
                 </div>
               </div>
+              <div class="field">
+                <label class="field-label">Recherche</label>
+                <div class="search-row">
+                  <select v-model="searchFieldDraft" class="field-select search-field-select">
+                    <option v-for="(label, key) in SEARCH_FIELD_OPTIONS" :key="key" :value="key">{{ label }}</option>
+                  </select>
+                  <input v-model="searchQueryDraft" type="text" class="field-input" placeholder="Rechercher…" />
+                </div>
+              </div>
             </template>
+
+            <div class="field">
+              <label class="field-label">Période</label>
+              <div class="date-row">
+                <label class="date-field">
+                  <span>Du</span>
+                  <input v-model="dateFromDraft" type="date" class="field-input" :max="dateToDraft || undefined" />
+                </label>
+                <label class="date-field">
+                  <span>Au</span>
+                  <input v-model="dateToDraft" type="date" class="field-input" :min="dateFromDraft || undefined" />
+                </label>
+              </div>
+            </div>
           </details>
 
           <!-- Options -->
@@ -224,6 +247,24 @@ const filterGroup    = mkArrayFilter('group')
 const filterEntity   = mkArrayFilter('entity')
 const filterCategory = mkArrayFilter('category')
 
+const dateFromDraft = computed({
+  get: () => draft.filters.dateFrom ?? '',
+  set: (v) => { if (v) draft.filters.dateFrom = v; else delete draft.filters.dateFrom },
+})
+const dateToDraft = computed({
+  get: () => draft.filters.dateTo ?? '',
+  set: (v) => { if (v) draft.filters.dateTo = v; else delete draft.filters.dateTo },
+})
+const searchFieldDraft = computed({
+  get: () => draft.filters.searchField ?? 'name',
+  set: (v) => { draft.filters.searchField = v },
+})
+const searchQueryDraft = computed({
+  get: () => draft.filters.searchQuery ?? '',
+  set: (v) => { if (v.trim()) draft.filters.searchQuery = v; else { delete draft.filters.searchQuery; delete draft.filters.searchField } },
+})
+const SEARCH_FIELD_OPTIONS = { name: 'Titre', category: 'Catégorie', requester: 'Demandeur', techName: 'Technicien' }
+
 const titleDraft = computed({
   get: () => draft.title ?? '',
   set: (v) => { draft.title = v.trim() ? v : null },
@@ -296,6 +337,8 @@ const activeFilterCount = computed(() => {
     if (f[k]?.length) n++
   }
   if (f.compliance) n++
+  if (f.dateFrom || f.dateTo) n++
+  if (f.searchQuery) n++
   return n
 })
 
@@ -337,6 +380,8 @@ function onMetricChange() {
     for (const k of ['status', 'priority', 'type', 'entity', 'category']) delete draft.filters[k]
     delete draft.filters.compliance
     delete draft.filters.hasNoTTO
+    delete draft.filters.searchField
+    delete draft.filters.searchQuery
     loadSatisfaction()
   }
 }
@@ -361,7 +406,7 @@ const autoTitlePlaceholder = computed(() => autoTitle(draft, period.value))
 // ── Live preview (debounced against the real data) ───────────────────────────
 const previewWidget = computed(() => ({ ...clone(draft), id: 'preview' }))
 
-const emptyFilters = { statuses: [], priorities: [], groups: [], entities: [], compliance: null, periods: [], dateFrom: null, dateTo: null }
+const emptyFilters = { statuses: [], priorities: [], groups: [], entities: [], compliance: null, periods: [] }
 const previewPayload = ref({ kind: 'empty' })
 let previewTimer = null
 watch([() => clone(draft), processedTickets, satisfactionRecords], () => {
@@ -558,6 +603,20 @@ function save() {
   gap: 16px;
   flex-wrap: wrap;
   align-items: flex-start;
+}
+
+.search-row { display: flex; gap: 8px; }
+.search-field-select { flex: 0 0 140px; }
+.search-row .field-input { flex: 1; }
+
+.date-row { display: flex; gap: 8px; }
+.date-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  flex: 1;
+  font-size: 0.72rem;
+  color: var(--text-muted);
 }
 
 .color-row { display: flex; align-items: center; gap: 8px; }
