@@ -59,10 +59,27 @@ export function applyWidgetFilters(rows, filters, source = 'tickets') {
     if (filters.compliance === 'compliant')    ts = ts.filter(t => !t.breached)
     if (filters.compliance === 'nonCompliant') ts = ts.filter(t => t.breached)
     if (filters.hasNoTTO === true) ts = ts.filter(t => t.hasNoTTO)
-    const query = filters.searchQuery?.trim().toLowerCase()
-    if (query) {
-      const field = filters.searchField || 'name'
-      ts = ts.filter(t => (t[field] ?? '').toString().toLowerCase().includes(query))
+    if (filters.searches?.length) {
+      const clauses = filters.searches
+        .map(c => ({ field: c?.field || 'name', query: c?.query?.trim().toLowerCase(), link: c?.link || 'AND' }))
+        .filter(c => c.query)
+      if (clauses.length) {
+        // GLPI-style: each clause (after the first) chains onto the running result via
+        // its own link (ET/OU/ET NON/OU NON), evaluated left-to-right, not a single global mode.
+        const matches = (t, c) => (t[c.field] ?? '').toString().toLowerCase().includes(c.query)
+        ts = ts.filter(t => {
+          let acc = matches(t, clauses[0])
+          for (let i = 1; i < clauses.length; i++) {
+            const c = clauses[i]
+            const m = matches(t, c)
+            if (c.link === 'OR') acc = acc || m
+            else if (c.link === 'ANDNOT') acc = acc && !m
+            else if (c.link === 'ORNOT') acc = acc || !m
+            else acc = acc && m
+          }
+          return acc
+        })
+      }
     }
   } else {
     if (filters.group?.length) ts = ts.filter(r => filters.group.includes(r.group))

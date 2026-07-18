@@ -122,12 +122,21 @@
               </div>
               <div class="field">
                 <label class="field-label">Recherche</label>
-                <div class="search-row">
-                  <select v-model="searchFieldDraft" class="field-select search-field-select">
+                <div v-for="(clause, i) in (draft.filters.searches || [])" :key="i" class="search-row">
+                  <select v-if="i > 0" v-model="clause.link" class="field-select search-link-select">
+                    <option value="AND">ET</option>
+                    <option value="OR">OU</option>
+                    <option value="ANDNOT">ET NON</option>
+                    <option value="ORNOT">OU NON</option>
+                  </select>
+                  <span v-else class="search-link-spacer" />
+                  <select v-model="clause.field" class="field-select search-field-select">
                     <option v-for="(label, key) in SEARCH_FIELD_OPTIONS" :key="key" :value="key">{{ label }}</option>
                   </select>
-                  <input v-model="searchQueryDraft" type="text" class="field-input" placeholder="Rechercher…" />
+                  <input v-model="clause.query" type="text" class="field-input" placeholder="Rechercher…" />
+                  <button type="button" class="remove-search-btn" title="Retirer" @click="removeSearchClause(i)">×</button>
                 </div>
+                <button type="button" class="add-search-btn" @click="addSearchClause">+ Ajouter une recherche</button>
               </div>
             </template>
 
@@ -255,15 +264,16 @@ const dateToDraft = computed({
   get: () => draft.filters.dateTo ?? '',
   set: (v) => { if (v) draft.filters.dateTo = v; else delete draft.filters.dateTo },
 })
-const searchFieldDraft = computed({
-  get: () => draft.filters.searchField ?? 'name',
-  set: (v) => { draft.filters.searchField = v },
-})
-const searchQueryDraft = computed({
-  get: () => draft.filters.searchQuery ?? '',
-  set: (v) => { if (v.trim()) draft.filters.searchQuery = v; else { delete draft.filters.searchQuery; delete draft.filters.searchField } },
-})
 const SEARCH_FIELD_OPTIONS = { name: 'Titre', category: 'Catégorie', requester: 'Demandeur', techName: 'Technicien' }
+
+function addSearchClause() {
+  if (!draft.filters.searches) draft.filters.searches = []
+  draft.filters.searches.push({ field: 'name', query: '', link: 'AND' })
+}
+function removeSearchClause(i) {
+  draft.filters.searches.splice(i, 1)
+  if (draft.filters.searches.length === 0) delete draft.filters.searches
+}
 
 const titleDraft = computed({
   get: () => draft.title ?? '',
@@ -338,7 +348,7 @@ const activeFilterCount = computed(() => {
   }
   if (f.compliance) n++
   if (f.dateFrom || f.dateTo) n++
-  if (f.searchQuery) n++
+  if (f.searches?.length) n += f.searches.filter(c => c.query?.trim()).length
   return n
 })
 
@@ -380,8 +390,7 @@ function onMetricChange() {
     for (const k of ['status', 'priority', 'type', 'entity', 'category']) delete draft.filters[k]
     delete draft.filters.compliance
     delete draft.filters.hasNoTTO
-    delete draft.filters.searchField
-    delete draft.filters.searchQuery
+    delete draft.filters.searches
     loadSatisfaction()
   }
 }
@@ -605,9 +614,33 @@ function save() {
   align-items: flex-start;
 }
 
-.search-row { display: flex; gap: 8px; }
+.search-row { display: flex; gap: 8px; margin-bottom: 6px; }
+.search-link-select { flex: 0 0 90px; }
+.search-link-spacer { flex: 0 0 90px; }
 .search-field-select { flex: 0 0 140px; }
 .search-row .field-input { flex: 1; }
+.remove-search-btn {
+  background: none;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--text-muted);
+  font-size: 14px;
+  line-height: 1;
+  padding: 0 10px;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+.remove-search-btn:hover { border-color: #ef4444; color: #ef4444; }
+.add-search-btn {
+  background: none;
+  border: 1px dashed var(--border);
+  border-radius: 6px;
+  color: var(--text-muted);
+  font-size: 0.78rem;
+  padding: 5px 10px;
+  cursor: pointer;
+}
+.add-search-btn:hover { border-color: var(--accent); color: var(--accent); }
 
 .date-row { display: flex; gap: 8px; }
 .date-field {
