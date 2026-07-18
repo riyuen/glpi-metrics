@@ -17,6 +17,7 @@
     <div class="widget-toolbar">
       <button class="tool-btn" title="Modifier" @click.stop="emit('edit')">✎</button>
       <button class="tool-btn" title="Dupliquer" @click.stop="emit('duplicate')">⧉</button>
+      <button v-if="widget.kind === 'stat'" class="tool-btn" title="Voir les tickets" @click.stop="emit('view-tickets')">☰</button>
       <button class="tool-btn tool-danger" title="Supprimer" @click.stop="emit('remove')">✕</button>
     </div>
 
@@ -36,7 +37,7 @@ defineProps({
   clickable: { type: Boolean, default: false },
   active: { type: Boolean, default: false },
 })
-const emit = defineEmits(['edit', 'duplicate', 'remove', 'resize-start', 'stat-click'])
+const emit = defineEmits(['edit', 'duplicate', 'remove', 'resize-start', 'stat-click', 'view-tickets'])
 </script>
 
 <style scoped>

@@ -42,6 +42,15 @@ export function applyGlobalFilters(rows, activeFilters, { skip = new Set(), sour
   if (!skip.has('periods') && activeFilters.periods.length) {
     ts = ts.filter(r => activeFilters.periods.includes(periodLabelOf(r, source, period)))
   }
+  if (activeFilters.dateFrom || activeFilters.dateTo) {
+    ts = ts.filter(r => {
+      if (!r.date) return false
+      const day = r.date.slice(0, 10)
+      if (activeFilters.dateFrom && day < activeFilters.dateFrom) return false
+      if (activeFilters.dateTo && day > activeFilters.dateTo) return false
+      return true
+    })
+  }
   return ts
 }
 

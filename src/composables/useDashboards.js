@@ -1,13 +1,16 @@
 // Named dashboards + widget persistence (module singleton).
-// Single versioned localStorage document replaces the legacy
-// glpi-chart-order / glpi-card-order / glpi-chart-spans keys (migrated once, then removed).
-import { reactive, computed, watch } from 'vue'
+// Fully shared, server-backed document — everyone using the app sees the same
+// dashboards (there's no auth anywhere in this app, so no per-user scoping).
+// Backed by the tiny dashboards-api service (GET/PUT /api/dashboards), which
+// stores one JSON file on the same volume the Airflow DAG writes metrics to.
+import { reactive, ref, computed, watch } from 'vue'
 import {
   DEFAULT_WIDGETS, newWidgetId,
   LEGACY_CHART_IDS, LEGACY_CARD_IDS, legacyChartSeedId, legacyCardSeedId,
 } from '../lib/registry.js'
 
-const STORAGE_KEY = 'glpi-dashboards'
+const API_URL = '/api/dashboards'
+const LOCAL_STORAGE_KEY = 'glpi-dashboards' // read once, as a seed source only — no longer written
 const LEGACY_KEYS = { chartOrder: 'glpi-chart-order', cardOrder: 'glpi-card-order', spans: 'glpi-chart-spans' }
 
 const clone = (o) => JSON.parse(JSON.stringify(o))
@@ -65,27 +68,84 @@ function migrateLegacyLayout(widgets) {
   return ordered
 }
 
-function loadDoc() {
+function isValidDoc(saved) {
+  return saved && saved.version === 1 && Array.isArray(saved.dashboards) && saved.dashboards.length > 0
+}
+
+// Used only as a one-time seed when the shared server document doesn't exist yet —
+// preserves whatever this browser already had locally instead of starting everyone blank.
+function loadLocalSeed() {
   try {
-    const saved = JSON.parse(localStorage.getItem(STORAGE_KEY) ?? 'null')
-    if (saved && saved.version === 1 && Array.isArray(saved.dashboards) && saved.dashboards.length > 0) {
-      return saved
-    }
+    const saved = JSON.parse(localStorage.getItem(LOCAL_STORAGE_KEY) ?? 'null')
+    if (isValidDoc(saved)) return saved
   } catch {}
   const dash = defaultDashboard()
   dash.widgets = migrateLegacyLayout(dash.widgets)
   return { version: 1, activeId: dash.id, dashboards: [dash] }
 }
 
-const doc = reactive(loadDoc())
+async function fetchServerDoc() {
+  try {
+    const res = await fetch(API_URL, { cache: 'no-store' })
+    if (!res.ok) return null
+    const saved = await res.json()
+    return isValidDoc(saved) ? saved : null
+  } catch {
+    return null
+  }
+}
+
+async function persistDoc(d) {
+  try {
+    // POST, not PUT: some front-line WAFs/proxies block PUT by default.
+    const res = await fetch(API_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(d),
+    })
+    if (!res.ok) throw new Error(`HTTP ${res.status}`)
+    return true
+  } catch (e) {
+    console.error('Failed to save dashboards to the server:', e)
+    return false
+  }
+}
+
+// ── Reactive state ────────────────────────────────────────────────────────────
+const doc = reactive({ version: 1, activeId: null, dashboards: [] })
+const ready = ref(false)
+const saveStatus = ref('idle') // 'idle' | 'saving' | 'saved' | 'error'
+let savedStatusTimer = null
+
+async function init() {
+  const fromServer = await fetchServerDoc()
+  const initial = fromServer ?? loadLocalSeed()
+  doc.version = initial.version
+  doc.activeId = initial.activeId
+  doc.dashboards = initial.dashboards
+  ready.value = true
+  if (!fromServer) await persistDoc(doc) // seed the server with this browser's state
+}
+
+init()
 
 let saveTimer = null
 watch(doc, () => {
+  if (!ready.value) return
   clearTimeout(saveTimer)
-  saveTimer = setTimeout(() => {
-    try { localStorage.setItem(STORAGE_KEY, JSON.stringify(doc)) } catch {}
-  }, 250)
+  saveTimer = setTimeout(() => { save() }, 250)
 }, { deep: true })
+
+// Manual save — bypasses the debounce so a click always saves right now
+// and surfaces whether it actually reached the server.
+async function save() {
+  clearTimeout(saveTimer)
+  clearTimeout(savedStatusTimer)
+  saveStatus.value = 'saving'
+  const ok = await persistDoc(doc)
+  saveStatus.value = ok ? 'saved' : 'error'
+  if (ok) savedStatusTimer = setTimeout(() => { saveStatus.value = 'idle' }, 2000)
+}
 
 const dashboards = computed(() => doc.dashboards)
 
@@ -177,6 +237,9 @@ function setSpan(id, span) {
 
 export function useDashboards() {
   return {
+    ready,
+    saveStatus,
+    save,
     dashboards,
     activeDashboard,
     activeWidgets,

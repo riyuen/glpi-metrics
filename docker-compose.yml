@@ -10,12 +10,19 @@ services:
     ports:
       - "80:80"
     volumes:
-      - ${HOME}/glpi-metrics-data:/usr/share/nginx/metrics
+      - ${DATA_DIR}:/usr/share/nginx/metrics
     environment:
       # Used by nginx to proxy /glpi-api/* → GLPI server (runtime)
       # Only substitute this variable — leave nginx's own $uri etc. alone
       NGINX_ENVSUBST_TEMPLATE_VARS: "GLPI_URL"
       GLPI_URL: ${VITE_GLPI_URL}
+    restart: unless-stopped
+
+  dashboards-api:
+    build:
+      context: ./dashboards-api
+    volumes:
+      - ${DATA_DIR}:/data
     restart: unless-stopped
 
   airflow:
@@ -29,7 +36,7 @@ services:
       GLPI_USER_TOKEN: ${VITE_GLPI_USER_TOKEN}
     volumes:
       - ./airflow/dags:/opt/airflow/dags
-      - ${HOME}/glpi-metrics-data:/data
+      - ${DATA_DIR}:/data
       - airflow-home:/opt/airflow
     ports:
       - "8080:8080"

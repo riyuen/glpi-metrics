@@ -361,7 +361,7 @@ const autoTitlePlaceholder = computed(() => autoTitle(draft, period.value))
 // ── Live preview (debounced against the real data) ───────────────────────────
 const previewWidget = computed(() => ({ ...clone(draft), id: 'preview' }))
 
-const emptyFilters = { statuses: [], priorities: [], groups: [], entities: [], compliance: null, periods: [] }
+const emptyFilters = { statuses: [], priorities: [], groups: [], entities: [], compliance: null, periods: [], dateFrom: null, dateTo: null }
 const previewPayload = ref({ kind: 'empty' })
 let previewTimer = null
 watch([() => clone(draft), processedTickets, satisfactionRecords], () => {

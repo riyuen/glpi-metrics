@@ -9,9 +9,16 @@
       <button class="bar-btn" title="Renommer" @click="openPrompt('rename')">Renommer</button>
       <button class="bar-btn" title="Dupliquer" @click="duplicateDashboard(activeDashboard.id)">Dupliquer</button>
       <button class="bar-btn bar-danger" title="Supprimer" @click="confirmDelete">Supprimer</button>
+      <button
+        class="bar-btn save-btn"
+        :class="saveStatus"
+        :disabled="saveStatus === 'saving'"
+        @click="save"
+      >{{ saveLabel }}</button>
     </div>
 
     <div class="bar-right">
+      <DateRangeFilter />
       <div class="period-toggle">
         <button :class="{ active: period === 'week' }" @click="period = 'week'">Hebdomadaire</button>
         <button :class="{ active: period === 'month' }" @click="period = 'month'">Mensuel</button>
@@ -48,14 +55,22 @@
 </template>
 
 <script setup>
-import { ref, nextTick } from 'vue'
+import { ref, computed, nextTick } from 'vue'
 import { useDashboards } from '../../composables/useDashboards.js'
 import { useFilters } from '../../composables/useFilters.js'
+import DateRangeFilter from './DateRangeFilter.vue'
 
 const emit = defineEmits(['add-widget'])
 
-const { dashboards, activeDashboard, setActive, createDashboard, renameDashboard, duplicateDashboard, deleteDashboard } = useDashboards()
+const { dashboards, activeDashboard, setActive, createDashboard, renameDashboard, duplicateDashboard, deleteDashboard, save, saveStatus } = useDashboards()
 const { period } = useFilters()
+
+const saveLabel = computed(() => ({
+  idle: 'Enregistrer',
+  saving: 'Enregistrement…',
+  saved: 'Enregistré ✓',
+  error: 'Échec ⚠',
+}[saveStatus.value]))
 
 const promptMode = ref(null) // null | 'create' | 'rename'
 const nameDraft = ref('')
@@ -127,6 +142,10 @@ function confirmDelete() {
 }
 .bar-btn:hover { border-color: var(--accent); color: var(--accent); }
 .bar-danger:hover { border-color: #ef4444; color: #ef4444; }
+
+.save-btn.saved { border-color: #22c55e; color: #22c55e; }
+.save-btn.error { border-color: #ef4444; color: #ef4444; }
+.save-btn:disabled { opacity: 0.7; cursor: wait; }
 
 .period-toggle { display: flex; gap: 6px; }
 .period-toggle button {

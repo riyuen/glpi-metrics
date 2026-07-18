@@ -18,6 +18,7 @@
         @remove="confirmRemove(widget)"
         @resize-start="startResize($event, widget)"
         @stat-click="toggleStatClause(payloads[widget.id]?.clause)"
+        @view-tickets="openTicketList(widget)"
       >
         <div :ref="el => registerEl(widget.id, el)" class="widget-body">
           <WidgetRenderer
@@ -32,9 +33,20 @@
     </template>
   </draggable>
 
-  <div v-if="activeWidgets.length === 0" class="empty-dashboard">
+  <TicketListDialog
+    v-if="ticketListDialog"
+    :tickets="ticketListDialog.tickets"
+    :title="ticketListDialog.title"
+    @close="ticketListDialog = null"
+  />
+
+  <div v-if="ready && activeWidgets.length === 0" class="empty-dashboard">
     <p>Ce tableau de bord est vide.</p>
     <button class="add-btn" @click="emit('add-widget')">+ Ajouter un widget</button>
+  </div>
+
+  <div v-else-if="!ready" class="empty-dashboard">
+    <p>Chargement du tableau de bord…</p>
   </div>
 </template>
 
@@ -43,8 +55,9 @@ import { ref, computed, reactive, watch, onMounted, onUnmounted } from 'vue'
 import draggable from 'vuedraggable'
 import WidgetShell from './WidgetShell.vue'
 import WidgetRenderer from '../widgets/WidgetRenderer.vue'
-import { computeWidgetData } from '../../lib/aggregate.js'
-import { METRICS } from '../../lib/registry.js'
+import TicketListDialog from './TicketListDialog.vue'
+import { computeWidgetData, rowsForWidget } from '../../lib/aggregate.js'
+import { METRICS, displayTitle } from '../../lib/registry.js'
 import { useDashboards } from '../../composables/useDashboards.js'
 import { useFilters } from '../../composables/useFilters.js'
 import { useMetricsData } from '../../composables/useMetricsData.js'
@@ -54,7 +67,7 @@ const props = defineProps({
 })
 const emit = defineEmits(['edit-widget', 'add-widget'])
 
-const { activeWidgets, duplicateWidget, removeWidget, setSpan } = useDashboards()
+const { ready, activeWidgets, duplicateWidget, removeWidget, setSpan } = useDashboards()
 const { activeFilters, period, toggleFilter, toggleStatClause } = useFilters()
 const { processedTickets, satisfactionRecords, loadSatisfaction } = useMetricsData()
 
@@ -96,6 +109,20 @@ function registerEl(id, el) {
 
 function confirmRemove(widget) {
   if (window.confirm('Supprimer ce widget ?')) removeWidget(widget.id)
+}
+
+// ── Ticket-list dialog (stat card toolbar "view tickets" action) ─────────────
+const ticketListDialog = ref(null) // { title, tickets } | null
+
+function openTicketList(widget) {
+  const rows = rowsForWidget(widget, ctx.value)
+  const isSatisfaction = METRICS[widget.metric]?.source === 'satisfaction'
+  let tickets = rows
+  if (isSatisfaction) {
+    const byId = new Map(ctx.value.tickets.map(t => [t.id, t]))
+    tickets = rows.map(r => byId.get(r.ticketId)).filter(Boolean)
+  }
+  ticketListDialog.value = { title: displayTitle(widget, period.value), tickets }
 }
 
 // ── Grid resize (drag the bottom-right handle, snaps to grid tracks) ─────────

@@ -8,6 +8,18 @@ server {
         try_files $uri $uri/ /index.html;
     }
 
+    # Shared dashboards document — proxied to the small read/write backend.
+    # Uses Docker's embedded DNS via a variable so nginx re-resolves the
+    # container's IP if dashboards-api is redeployed independently of this one.
+    location /api/dashboards {
+        resolver 127.0.0.11 valid=10s;
+        set $dashboards_api "http://dashboards-api:3001";
+        proxy_pass $dashboards_api/dashboards;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        add_header Cache-Control "no-store";
+    }
+
     # Serve pre-fetched metrics JSON written by Airflow
     location /api/ {
         alias /usr/share/nginx/metrics/;
