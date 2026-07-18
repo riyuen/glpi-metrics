@@ -11,7 +11,16 @@ const activeFilters = reactive({
   periods:    [],   // week/month label strings matching the current period granularity
   dateFrom:   null, // 'YYYY-MM-DD' | null — inclusive
   dateTo:     null, // 'YYYY-MM-DD' | null — inclusive
+  searchField: 'name', // 'name' | 'category' | 'requester' | 'techName'
+  searchQuery: '',     // free text, case-insensitive substring match against searchField
 })
+
+const SEARCH_FIELD_LABELS = {
+  name:      'Titre',
+  category:  'Catégorie',
+  requester: 'Demandeur',
+  techName:  'Technicien',
+}
 
 const period = ref('week') // 'week' | 'month'
 const datePreset = ref(null) // null | 'today' | 'yesterday' | 'last7' | 'last30' | 'thisMonth' | 'thisYear' | 'custom'
@@ -91,7 +100,8 @@ const hasActiveFilters = computed(() =>
   activeFilters.compliance !== null ||
   activeFilters.periods.length > 0 ||
   activeFilters.dateFrom !== null ||
-  activeFilters.dateTo !== null
+  activeFilters.dateTo !== null ||
+  activeFilters.searchQuery.trim() !== ''
 )
 
 // Toggle one value in a filter dimension. 'compliance' is scalar, the rest are arrays.
@@ -123,6 +133,7 @@ function toggleStatClause(clause) {
 function clearFilter(key) {
   if (key === 'compliance') activeFilters.compliance = null
   else if (key === 'dateRange') clearDateFilter()
+  else if (key === 'search') activeFilters.searchQuery = ''
   else if (Array.isArray(activeFilters[key])) activeFilters[key].length = 0
 }
 
@@ -133,6 +144,7 @@ function clearFilters() {
   activeFilters.entities.length   = 0
   activeFilters.periods.length    = 0
   activeFilters.compliance        = null
+  activeFilters.searchQuery       = ''
   clearDateFilter()
 }
 
@@ -149,6 +161,9 @@ const filterSummaryParts = computed(() => {
     const label = PRESET_LABELS[datePreset.value]
       ?? `${fmtDisplay(activeFilters.dateFrom) ?? '…'} → ${fmtDisplay(activeFilters.dateTo) ?? '…'}`
     parts.push({ key: 'dateRange', text: `Dates : ${label}` })
+  }
+  if (activeFilters.searchQuery.trim()) {
+    parts.push({ key: 'search', text: `${SEARCH_FIELD_LABELS[activeFilters.searchField]} contient : "${activeFilters.searchQuery.trim()}"` })
   }
   return parts
 })
@@ -167,5 +182,6 @@ export function useFilters() {
     setDatePreset,
     setCustomDateRange,
     clearDateFilter,
+    SEARCH_FIELD_LABELS,
   }
 }

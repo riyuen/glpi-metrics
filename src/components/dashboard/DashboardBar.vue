@@ -19,6 +19,7 @@
 
     <div class="bar-right">
       <DateRangeFilter />
+      <TicketSearchFilter />
       <div class="period-toggle">
         <button :class="{ active: period === 'week' }" @click="period = 'week'">Hebdomadaire</button>
         <button :class="{ active: period === 'month' }" @click="period = 'month'">Mensuel</button>
@@ -59,6 +60,7 @@ import { ref, computed, nextTick } from 'vue'
 import { useDashboards } from '../../composables/useDashboards.js'
 import { useFilters } from '../../composables/useFilters.js'
 import DateRangeFilter from './DateRangeFilter.vue'
+import TicketSearchFilter from './TicketSearchFilter.vue'
 
 const emit = defineEmits(['add-widget'])
 

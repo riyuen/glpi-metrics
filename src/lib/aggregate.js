@@ -35,6 +35,11 @@ export function applyGlobalFilters(rows, activeFilters, { skip = new Set(), sour
       if (activeFilters.compliance === 'compliant')    ts = ts.filter(t => !t.breached)
       if (activeFilters.compliance === 'nonCompliant') ts = ts.filter(t => t.breached)
     }
+    const query = activeFilters.searchQuery?.trim().toLowerCase()
+    if (!skip.has('search') && query) {
+      const field = activeFilters.searchField || 'name'
+      ts = ts.filter(t => (t[field] ?? '').toString().toLowerCase().includes(query))
+    }
   } else {
     // Satisfaction records only carry group + date — other global filters don't apply
     if (!skip.has('groups') && activeFilters.groups.length) ts = ts.filter(r => activeFilters.groups.includes(r.group))
