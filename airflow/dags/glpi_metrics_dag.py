@@ -168,18 +168,20 @@ def fetch_and_write(**_):
     group_users  = fetch_all(session_token, "Group_User")
     satisfactions = fetch_all(session_token, "TicketSatisfaction")
     categories   = fetch_all(session_token, "ITILCategory")
+    locations    = fetch_all(session_token, "Location")
 
     log.info(
         "Fetched: %d tickets, %d groups, %d group_tickets, %d entities, "
-        "%d slas, %d users, %d ticket_users, %d group_users, %d satisfactions, %d categories",
+        "%d slas, %d users, %d ticket_users, %d group_users, %d satisfactions, %d categories, %d locations",
         len(tickets), len(groups), len(group_tickets), len(entities),
-        len(slas), len(users), len(ticket_users), len(group_users), len(satisfactions), len(categories),
+        len(slas), len(users), len(ticket_users), len(group_users), len(satisfactions), len(categories), len(locations),
     )
 
     # Build lookup maps
     group_names = {g["id"]: clean_group_name(g["name"]) for g in groups}
     entity_names = {e["id"]: e["name"] for e in entities}
     category_names = {c["id"]: c.get("completename") or c.get("name") for c in categories}
+    location_names = {l["id"]: l.get("completename") or l.get("name") for l in locations}
     user_names = {
         u["id"]: " ".join(filter(None, [u.get("firstname"), u.get("realname")])) or u.get("name", "")
         for u in users
@@ -193,11 +195,16 @@ def fetch_and_write(**_):
             "targetH": round(secs / 3600, 1) if secs > 0 else None,
         }
 
-    # ticket → assigned group (type 2)
-    group_map: dict[int, str] = {}
+    # ticket → assigned groups (type 2) — a ticket can carry more than one group
+    group_map: dict[int, list[str]] = {}
     for gt in group_tickets:
-        if gt.get("type") == 2 and gt["tickets_id"] not in group_map:
-            group_map[gt["tickets_id"]] = group_names.get(gt["groups_id"], "Unknown")
+        if gt.get("type") != 2:
+            continue
+        tid = gt["tickets_id"]
+        gname = group_names.get(gt["groups_id"], "Unknown")
+        bucket = group_map.setdefault(tid, [])
+        if gname not in bucket:
+            bucket.append(gname)
 
     # ticket → tech name + userId (type 2)
     tech_map: dict[int, str] = {}
@@ -238,7 +245,10 @@ def fetch_and_write(**_):
         week    = to_iso_week(date) if date else None
         month   = date[:7] if date else None
         quarter = to_iso_quarter(date) if date else None
-        group  = group_map.get(tid, "Unassigned")
+        solvedate   = ticket.get("solvedate")
+        close_week  = to_iso_week(solvedate) if solvedate and status in (5, 6) else None
+        close_month = solvedate[:7] if solvedate and status in (5, 6) else None
+        groups = group_map.get(tid) or ["Unassigned"]
         entity = entity_names.get(ticket.get("entities_id"), f"Entity {ticket.get('entities_id')}")
         breached = is_breached(ticket)
 
@@ -250,10 +260,13 @@ def fetch_and_write(**_):
         ttr_sla = sla_map.get(ttr_sla_id) if ttr_sla_id > 0 else None
         tto_sla = sla_map.get(tto_sla_id) if tto_sla_id > 0 else None
 
+        # Credited if the assigned tech belongs to ANY of the ticket's groups
+        # (a ticket with multiple groups shouldn't silently drop tech credit
+        # just because the tech's group isn't the first one listed).
         uid = tech_user_id_map.get(tid)
         tech_name = (
             tech_map[tid]
-            if uid is not None and group in group_membership.get(uid, set())
+            if uid is not None and group_membership.get(uid, set()) & set(groups)
             else None
         )
 
@@ -266,9 +279,12 @@ def fetch_and_write(**_):
             "week":         week,
             "month":        month,
             "quarter":      quarter,
-            "group":        group,
+            "closeWeek":    close_week,
+            "closeMonth":   close_month,
+            "groups":       groups,
             "entity":       entity,
             "category":     category_names.get(ticket.get("itilcategories_id"), "Sans catégorie"),
+            "location":     location_names.get(ticket.get("locations_id"), "Sans emplacement"),
             "type":         int(ticket.get("type") or 0) or None,
             "requester":    requester_map.get(tid, "—"),
             "breached":     breached,
@@ -298,12 +314,12 @@ def fetch_and_write(**_):
     for s in satisfactions:
         if not s.get("date_answered") or not int(s.get("satisfaction") or 0) > 0:
             continue
-        tid   = s["tickets_id"]
-        group = group_map.get(tid, "Unassigned")
-        uid   = tech_user_id_map.get(tid)
+        tid    = s["tickets_id"]
+        groups = group_map.get(tid) or ["Unassigned"]
+        uid    = tech_user_id_map.get(tid)
         technician = (
             tech_map[tid]
-            if uid is not None and group in group_membership.get(uid, set())
+            if uid is not None and group_membership.get(uid, set()) & set(groups)
             else "—"
         )
         satisfaction_list.append({
@@ -311,7 +327,7 @@ def fetch_and_write(**_):
             "score":      int(s["satisfaction"]),
             "comment":    (s.get("comment") or "").strip(),
             "date":       s["date_answered"],
-            "group":      group,
+            "groups":     groups,
             "technician": technician,
             "requester":  requester_map.get(tid, "—"),
         })

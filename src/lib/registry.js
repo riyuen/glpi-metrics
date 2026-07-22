@@ -10,6 +10,7 @@ export const STATUS_COLORS = {
   4: '#6b7280',
   5: '#10b981',
   6: '#374151',
+  10: '#ec4899',
 }
 
 export const PRIORITY_COLORS = {
@@ -106,7 +107,7 @@ export const DIMENSIONS = {
     accessor: t => t.status,
     valueLabel: v => STATUS[v] ?? `Statut ${v}`,
     colors: STATUS_COLORS,
-    fixedOrder: [1, 2, 3, 4, 5, 6],
+    fixedOrder: [1, 2, 3, 4, 10, 5, 6],
     filterKey: 'statuses',
   },
   priority: {
@@ -126,8 +127,11 @@ export const DIMENSIONS = {
   },
   group: {
     label: 'Groupe',
-    accessor: t => t.group,
-    satAccessor: r => r.group,
+    // A ticket can carry more than one group — accessor returns an array,
+    // and bucketBy() (lib/aggregate.js) fans a row out into every matching
+    // bucket instead of assuming one value per row.
+    accessor: t => t.groups,
+    satAccessor: r => r.groups,
     filterKey: 'groups',
   },
   entity: {
@@ -138,6 +142,11 @@ export const DIMENSIONS = {
   category: {
     label: 'Catégorie',
     accessor: t => t.category,
+    filterKey: null,
+  },
+  location: {
+    label: 'Emplacement',
+    accessor: t => t.location,
     filterKey: null,
   },
   technician: {
@@ -193,6 +202,29 @@ export const DIMENSIONS = {
     isTime: true,
     resolvesTo: p => (p === 'week' ? 'week' : 'month'),
     filterKey: 'periods',
+  },
+  // Bucketed by solvedate (only set while status is currently Solved/Closed) rather than
+  // opening date — a ticket solved then reopened won't count as "closed" in that period.
+  // filterKey is null (not 'periods'): periodLabelOf() in aggregate.js only ever reads the
+  // opening-date week/month, so cross-filtering off this axis would silently mismatch.
+  closeWeek: {
+    label: 'Semaine de clôture',
+    accessor: t => t.closeWeek,
+    isTime: true,
+    filterKey: null,
+  },
+  closeMonth: {
+    label: 'Mois de clôture',
+    accessor: t => t.closeMonth,
+    isTime: true,
+    filterKey: null,
+  },
+  // Pseudo-dimension: follows the global Hebdomadaire/Mensuel toggle
+  closePeriod: {
+    label: 'Période de clôture (suit Hebdo/Mensuel)',
+    isTime: true,
+    resolvesTo: p => (p === 'week' ? 'closeWeek' : 'closeMonth'),
+    filterKey: null,
   },
 }
 
@@ -257,6 +289,7 @@ export const WIDGET_FILTER_DEFS = {
   entity:   { label: 'Entité',   dimension: 'entity' },
   category: { label: 'Catégorie', dimension: 'category' },
   type:     { label: 'Type',     dimension: 'type' },
+  location: { label: 'Emplacement', dimension: 'location' },
 }
 
 // Titles may contain {période} → 'semaine'/'mois' and {hebdo} → 'hebdo.'/'mensuel'.
@@ -275,9 +308,8 @@ export function autoTitle(widget, period = 'week') {
   if (widget.dimension === 'custom') {
     dimLabel = 'personnalisé'
   } else {
-    const dimKey = widget.dimension === 'period'
-      ? DIMENSIONS.period.resolvesTo(period)
-      : widget.dimension
+    const baseDim = DIMENSIONS[widget.dimension]
+    const dimKey = baseDim?.resolvesTo ? baseDim.resolvesTo(period) : widget.dimension
     const dim = DIMENSIONS[dimKey]
     dimLabel = dim?.label?.toLowerCase() ?? dimKey
   }
@@ -321,7 +353,7 @@ export function emptyWidget(kind = 'chart') {
 // (glpi-chart-order / glpi-card-order / glpi-chart-spans) can map onto them.
 export const DEFAULT_WIDGETS = [
   // Stat cards (legacy card ids → seed-card-<id>)
-  { id: 'seed-card-open',         kind: 'stat', title: 'Tickets ouverts',    metric: 'count',         dimension: null, segmentBy: null, chartType: 'bar', filters: { status: [1, 2, 3, 4] }, span: { col: 2, row: 2 }, options: {} },
+  { id: 'seed-card-open',         kind: 'stat', title: 'Tickets ouverts',    metric: 'count',         dimension: null, segmentBy: null, chartType: 'bar', filters: { status: [1, 2, 3, 4, 10] }, span: { col: 2, row: 2 }, options: {} },
   { id: 'seed-card-total',        kind: 'stat', title: 'Total tickets',      metric: 'count',         dimension: null, segmentBy: null, chartType: 'bar', filters: {},                        span: { col: 2, row: 2 }, options: {} },
   { id: 'seed-card-solved',       kind: 'stat', title: 'Clôturés / Résolus', metric: 'count',         dimension: null, segmentBy: null, chartType: 'bar', filters: { status: [5, 6] },        span: { col: 2, row: 2 }, options: {} },
   { id: 'seed-card-compliance',   kind: 'stat', title: 'Conformité SLA',     metric: 'slaCompliance', dimension: null, segmentBy: null, chartType: 'bar', filters: {},                        span: { col: 2, row: 2 }, options: {} },

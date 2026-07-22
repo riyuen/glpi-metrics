@@ -74,6 +74,7 @@
             :group-options="groupOptions"
             :entity-options="entityOptions"
             :category-options="categoryOptions"
+            :location-options="locationOptions"
             :search-field-options="SEARCH_FIELD_OPTIONS"
           />
 
@@ -93,6 +94,16 @@
             <div v-if="draft.kind === 'chart' && !isTimeDimension" class="field small">
               <label class="field-label">Top N</label>
               <input v-model.number="topNDraft" type="number" min="1" class="field-input" placeholder="Tous" />
+            </div>
+            <div v-if="draft.kind === 'chart' && !isTimeDimension" class="field small">
+              <label class="field-label">Trier par</label>
+              <select v-model="sortOrderDraft" class="field-select">
+                <option value="">Par défaut</option>
+                <option value="value-desc">Valeur (décroissant)</option>
+                <option value="value-asc">Valeur (croissant)</option>
+                <option value="label-asc">Alphabétique (A→Z)</option>
+                <option value="label-desc">Alphabétique (Z→A)</option>
+              </select>
             </div>
             <div v-if="isDurationMetric" class="field small">
               <label class="field-label">Unité</label>
@@ -180,6 +191,10 @@ const topNDraft = computed({
   get: () => draft.options.topN ?? '',
   set: (v) => { if (v > 0) draft.options.topN = v; else delete draft.options.topN },
 })
+const sortOrderDraft = computed({
+  get: () => draft.options.sortOrder ?? '',
+  set: (v) => { if (v) draft.options.sortOrder = v; else delete draft.options.sortOrder },
+})
 const unitDraft = computed({
   get: () => draft.options.unit ?? 'days',
   set: (v) => { draft.options.unit = v },
@@ -204,7 +219,11 @@ const isTimeDimension = computed(() => {
 const availableDimensions = computed(() => {
   const out = {}
   for (const [key, d] of Object.entries(DIMENSIONS)) {
-    if (isSatisfaction.value && !d.satAccessor && !d.resolvesTo) continue
+    if (isSatisfaction.value) {
+      const supportsSat = d.satAccessor
+        || (d.resolvesTo && DIMENSIONS[d.resolvesTo('week')]?.satAccessor && DIMENSIONS[d.resolvesTo('month')]?.satAccessor)
+      if (!supportsSat) continue
+    }
     out[key] = d
   }
   return out
@@ -239,17 +258,19 @@ const canPercent = computed(() =>
 
 // Distinct filter values from the loaded tickets
 const distincts = computed(() => {
-  const groups = new Set(), entities = new Set(), categories = new Set()
+  const groups = new Set(), entities = new Set(), categories = new Set(), locations = new Set()
   for (const t of processedTickets.value) {
-    groups.add(t.group)
+    for (const g of t.groups ?? []) groups.add(g)
     entities.add(t.entity)
     categories.add(t.category)
+    locations.add(t.location)
   }
   const sortFr = (a, b) => a.localeCompare(b, 'fr')
   return {
     groups: [...groups].sort(sortFr),
     entities: [...entities].sort(sortFr),
     categories: [...categories].sort(sortFr),
+    locations: [...locations].sort(sortFr),
   }
 })
 
@@ -259,6 +280,7 @@ const typeOptions     = computed(() => Object.entries(TYPE).map(([code, label]) 
 const groupOptions    = computed(() => distincts.value.groups.map((g) => ({ value: g, label: g })))
 const entityOptions   = computed(() => distincts.value.entities.map((e) => ({ value: e, label: e })))
 const categoryOptions = computed(() => distincts.value.categories.map((c) => ({ value: c, label: c })))
+const locationOptions = computed(() => distincts.value.locations.map((l) => ({ value: l, label: l })))
 
 const showCustomGroups = computed(() => draft.dimension === 'custom' || draft.segmentBy === 'custom')
 
@@ -286,7 +308,7 @@ function onMetricChange() {
   if (!availableChartTypes.value[draft.chartType]) draft.chartType = 'bar'
   if (isSatisfaction.value) {
     // Drop ticket-only filters
-    for (const k of ['status', 'priority', 'type', 'entity', 'category']) delete draft.filters[k]
+    for (const k of ['status', 'priority', 'type', 'entity', 'category', 'location']) delete draft.filters[k]
     delete draft.filters.compliance
     delete draft.filters.hasNoTTO
     delete draft.filters.searches
@@ -331,7 +353,7 @@ watch([() => clone(draft), processedTickets, satisfactionRecords], () => {
       previewPayload.value = { kind: 'empty' }
     }
   }, 150)
-}, { deep: true, immediate: true })
+}, { immediate: true })
 
 function save() {
   if (!isValid.value) return

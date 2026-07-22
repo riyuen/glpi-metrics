@@ -79,7 +79,7 @@
             >
               <td class="col-id text-muted">{{ t.id }}</td>
               <td class="col-name">{{ t.name || '—' }}</td>
-              <td class="col-group text-muted">{{ t.group }}</td>
+              <td class="col-group text-muted">{{ (t.groups ?? []).join(', ') || '—' }}</td>
               <td class="col-entity text-muted">{{ t.entity }}</td>
               <td class="col-status">
                 <span class="badge" :style="{ background: STATUS_COLORS[t.status] ?? '#6b7280' }">
@@ -153,7 +153,9 @@ const candidates = computed(() =>
 
 const groupCounts = computed(() => {
   const map = {}
-  for (const t of candidates.value) map[t.group] = (map[t.group] ?? 0) + 1
+  for (const t of candidates.value) {
+    for (const g of t.groups ?? []) map[g] = (map[g] ?? 0) + 1
+  }
   return Object.entries(map)
     .map(([name, count]) => ({ name, count }))
     .sort((a, b) => b.count - a.count)
@@ -173,7 +175,7 @@ const allGroupsSelected = computed(() => selectedGroups.value.length === groupCo
 
 const filtered = computed(() => {
   let ts = candidates.value
-  if (selectedGroups.value.length) ts = ts.filter(t => selectedGroups.value.includes(t.group))
+  if (selectedGroups.value.length) ts = ts.filter(t => t.groups?.some(g => selectedGroups.value.includes(g)))
   if (selectedSLAs.value.length) ts = ts.filter(t => selectedSLAs.value.includes(t.ttoSlaName))
   return ts
 })
@@ -221,7 +223,7 @@ function exportCSV() {
   const rows = sorted.value.map(t => [
     t.id,
     t.name || '—',
-    t.group,
+    (t.groups ?? []).join('; '),
     t.entity,
     STATUS[t.status] ?? `Status ${t.status}`,
     t.ttoSlaName || '—',

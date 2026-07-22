@@ -32,6 +32,10 @@
         <MultiSelectDropdown v-model="filterCategory" :options="categoryOptions" />
       </div>
       <div class="field">
+        <label class="field-label">Emplacement</label>
+        <MultiSelectDropdown v-model="filterLocation" :options="locationOptions" />
+      </div>
+      <div class="field">
         <label class="field-label">Conformité SLA</label>
         <div class="chip-row">
           <button :class="{ active: !filters.compliance }" @click="filters.compliance = null">Tous</button>
@@ -88,6 +92,7 @@ const props = defineProps({
   groupOptions: { type: Array, default: () => [] },
   entityOptions: { type: Array, default: () => [] },
   categoryOptions: { type: Array, default: () => [] },
+  locationOptions: { type: Array, default: () => [] },
   searchFieldOptions: { type: Object, required: true },
 })
 
@@ -104,6 +109,7 @@ const filterType     = mkArrayFilter('type')
 const filterGroup    = mkArrayFilter('group')
 const filterEntity   = mkArrayFilter('entity')
 const filterCategory = mkArrayFilter('category')
+const filterLocation = mkArrayFilter('location')
 
 const dateFromDraft = computed({
   get: () => filters.dateFrom ?? '',
@@ -126,7 +132,7 @@ function removeSearchClause(i) {
 const activeFilterCount = computed(() => {
   const f = filters
   let n = 0
-  for (const k of ['status', 'priority', 'type', 'group', 'entity', 'category']) {
+  for (const k of ['status', 'priority', 'type', 'group', 'entity', 'category', 'location']) {
     if (f[k]?.length) n++
   }
   if (f.compliance) n++

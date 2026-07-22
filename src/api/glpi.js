@@ -7,6 +7,7 @@ export const STATUS = {
   4: 'En attente',
   5: 'Résolu',
   6: 'Clôturé',
+  10: 'Approbation',
 }
 
 export const PRIORITY = {

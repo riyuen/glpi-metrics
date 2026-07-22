@@ -130,7 +130,7 @@
               <span class="comment-stars" :style="{ color: scoreColor(c.score) }">{{ starsFor(c.score) }}</span>
               <span class="score-chip" :style="{ color: scoreColor(c.score), borderColor: scoreColor(c.score) }">{{ c.score }}/5</span>
               <span class="meta-sep">·</span>
-              <span class="meta-group">{{ c.group }}</span>
+              <span class="meta-group">{{ (c.groups ?? []).join(', ') }}</span>
               <span class="meta-sep">·</span>
               <span class="meta-tech">{{ c.requester }}</span>
               <span class="meta-sep">·</span>
@@ -205,13 +205,15 @@ const commentsCount = computed(() => filteredRecords.value.filter(r => r.comment
 const groupStats = computed(() => {
   const groups = {}
   for (const r of filteredRecords.value) {
-    if (!groups[r.group]) groups[r.group] = { total: 0, count: 0, techs: {} }
-    groups[r.group].total += r.score
-    groups[r.group].count++
-    const t = r.technician
-    if (!groups[r.group].techs[t]) groups[r.group].techs[t] = { total: 0, count: 0 }
-    groups[r.group].techs[t].total += r.score
-    groups[r.group].techs[t].count++
+    for (const g of r.groups ?? []) {
+      if (!groups[g]) groups[g] = { total: 0, count: 0, techs: {} }
+      groups[g].total += r.score
+      groups[g].count++
+      const t = r.technician
+      if (!groups[g].techs[t]) groups[g].techs[t] = { total: 0, count: 0 }
+      groups[g].techs[t].total += r.score
+      groups[g].techs[t].count++
+    }
   }
   return Object.entries(groups)
     .map(([name, g]) => ({
@@ -227,7 +229,7 @@ const groupStats = computed(() => {
 
 const filteredComments = computed(() => {
   let list = filteredRecords.value.filter(r => r.comment)
-  if (commentGroupFilter.value) list = list.filter(r => r.group === commentGroupFilter.value)
+  if (commentGroupFilter.value) list = list.filter(r => r.groups?.includes(commentGroupFilter.value))
   return list
 })
 </script>

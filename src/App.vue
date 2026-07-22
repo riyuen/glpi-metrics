@@ -1,6 +1,6 @@
 <template>
   <div class="app">
-    <header class="app-header">
+    <header v-if="!route.meta.bare" class="app-header">
       <div class="header-left">
         <h1>GLPI Metrics</h1>
         <nav class="app-nav">
@@ -20,13 +20,13 @@
       </div>
     </header>
 
-    <div v-if="error && !loading" class="ori-alert ori-alert--danger app-error" role="alert">
+    <div v-if="error && !loading && !route.meta.bare" class="ori-alert ori-alert--danger app-error" role="alert">
       {{ error }}
     </div>
 
     <RouterView />
 
-    <footer class="app-footer">
+    <footer v-if="!route.meta.bare" class="app-footer">
       <span v-if="lastUpdated">Dernière mise à jour : {{ lastUpdated }}</span>
     </footer>
   </div>

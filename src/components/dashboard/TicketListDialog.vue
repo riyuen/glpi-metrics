@@ -44,7 +44,7 @@
                   {{ PRIORITY[t.priority] ?? `Priorité ${t.priority}` }}
                 </span>
               </td>
-              <td class="col-group text-muted">{{ t.group ?? '—' }}</td>
+              <td class="col-group text-muted">{{ (t.groups ?? []).join(', ') || '—' }}</td>
               <td class="col-date text-muted">{{ t.date?.substring(0, 10) ?? '—' }}</td>
             </tr>
           </tbody>
@@ -75,7 +75,7 @@ function exportCSV() {
     t.name || '—',
     STATUS[t.status] ?? `Status ${t.status}`,
     PRIORITY[t.priority] ?? `Priorité ${t.priority}`,
-    t.group ?? '—',
+    (t.groups ?? []).join('; ') || '—',
     t.date?.substring(0, 10) ?? '—',
     `${GLPI_URL}/front/ticket.form.php?id=${t.id}`,
   ])

@@ -40,5 +40,14 @@ services:
       - "8080:8080"
     restart: unless-stopped
 
+  dashboard-render:
+    build:
+      context: ./dashboard-render
+    profiles: ["cron"] # excluded from `docker compose up`; only runs via explicit `run`
+    environment:
+      APP_BASE_URL: http://app
+    volumes:
+      - ./dashboard-render/output:/output
+
 volumes:
   airflow-home:

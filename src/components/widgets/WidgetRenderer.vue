@@ -48,6 +48,7 @@
     :title="title"
     :labels="payload.labels"
     :data="convertedSeries[0].data"
+    :color="convertedSeries[0].color"
     :theme="theme"
     :highlighted-periods="payload.meta.highlighted ?? []"
     :value-suffix="valueSuffix"

@@ -3,7 +3,7 @@
     <h3 class="chart-title">{{ title }}</h3>
     <div class="bars">
       <div
-        v-for="item in sortedItems"
+        v-for="item in items"
         :key="item.label"
         class="bar-row"
         :class="{ dimmed: item.dimmed }"
@@ -32,7 +32,6 @@ const props = defineProps({
 const emit = defineEmits(['item-click'])
 
 const max = computed(() => Math.max(...props.items.map((i) => i.count), 1))
-const sortedItems = computed(() => [...props.items].sort((a, b) => b.count - a.count))
 
 function pct(count) {
   return Math.round((count / max.value) * 100)
@@ -84,7 +83,9 @@ function pct(count) {
   width: 90px;
   font-size: 0.82rem;
   color: var(--text);
-  white-space: nowrap;
+  white-space: normal;
+  overflow-wrap: break-word;
+  line-height: 1.25;
   flex-shrink: 0;
 }
 .bar-track {

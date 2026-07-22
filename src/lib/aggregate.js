@@ -29,7 +29,7 @@ export function applyGlobalFilters(rows, activeFilters, { skip = new Set(), sour
   if (source === 'tickets') {
     if (!skip.has('statuses') && activeFilters.statuses.length)     ts = ts.filter(t => activeFilters.statuses.includes(t.status))
     if (!skip.has('priorities') && activeFilters.priorities.length) ts = ts.filter(t => activeFilters.priorities.includes(t.priority))
-    if (!skip.has('groups') && activeFilters.groups.length)         ts = ts.filter(t => activeFilters.groups.includes(t.group))
+    if (!skip.has('groups') && activeFilters.groups.length)         ts = ts.filter(t => t.groups?.some(g => activeFilters.groups.includes(g)))
     if (!skip.has('entities') && activeFilters.entities.length)     ts = ts.filter(t => activeFilters.entities.includes(t.entity))
     if (!skip.has('compliance')) {
       if (activeFilters.compliance === 'compliant')    ts = ts.filter(t => !t.breached)
@@ -37,7 +37,7 @@ export function applyGlobalFilters(rows, activeFilters, { skip = new Set(), sour
     }
   } else {
     // Satisfaction records only carry group + date — other global filters don't apply
-    if (!skip.has('groups') && activeFilters.groups.length) ts = ts.filter(r => activeFilters.groups.includes(r.group))
+    if (!skip.has('groups') && activeFilters.groups.length) ts = ts.filter(r => r.groups?.some(g => activeFilters.groups.includes(g)))
   }
   if (!skip.has('periods') && activeFilters.periods.length) {
     ts = ts.filter(r => activeFilters.periods.includes(periodLabelOf(r, source, period)))
@@ -52,9 +52,10 @@ export function applyWidgetFilters(rows, filters, source = 'tickets') {
   if (source === 'tickets') {
     if (filters.status?.length)   ts = ts.filter(t => filters.status.includes(t.status))
     if (filters.priority?.length) ts = ts.filter(t => filters.priority.includes(t.priority))
-    if (filters.group?.length)    ts = ts.filter(t => filters.group.includes(t.group))
+    if (filters.group?.length)    ts = ts.filter(t => t.groups?.some(g => filters.group.includes(g)))
     if (filters.entity?.length)   ts = ts.filter(t => filters.entity.includes(t.entity))
     if (filters.category?.length) ts = ts.filter(t => filters.category.includes(t.category))
+    if (filters.location?.length) ts = ts.filter(t => filters.location.includes(t.location))
     if (filters.type?.length)     ts = ts.filter(t => filters.type.includes(t.type))
     if (filters.compliance === 'compliant')    ts = ts.filter(t => !t.breached)
     if (filters.compliance === 'nonCompliant') ts = ts.filter(t => t.breached)
@@ -82,7 +83,7 @@ export function applyWidgetFilters(rows, filters, source = 'tickets') {
       }
     }
   } else {
-    if (filters.group?.length) ts = ts.filter(r => filters.group.includes(r.group))
+    if (filters.group?.length) ts = ts.filter(r => r.groups?.some(g => filters.group.includes(g)))
   }
   if (filters.dateFrom || filters.dateTo) {
     ts = ts.filter(r => {
@@ -142,15 +143,18 @@ export function computeSlaTargets(rows, segKey) {
 }
 
 // group → tech tree of average resolution times (in days) — feeds TechTimeChart.
+// A ticket with multiple groups contributes its resolution time to each of them.
 export function buildTechTree(rows) {
   const byTechGroup = {}
   for (const t of rows) {
     if (t.resolveMs == null || !t.techName) continue
-    if (!byTechGroup[t.group]) byTechGroup[t.group] = {}
-    const tg = byTechGroup[t.group]
-    if (!tg[t.techName]) tg[t.techName] = { sum: 0, count: 0 }
-    tg[t.techName].sum   += t.resolveMs
-    tg[t.techName].count += 1
+    for (const g of t.groups ?? []) {
+      if (!byTechGroup[g]) byTechGroup[g] = {}
+      const tg = byTechGroup[g]
+      if (!tg[t.techName]) tg[t.techName] = { sum: 0, count: 0 }
+      tg[t.techName].sum   += t.resolveMs
+      tg[t.techName].count += 1
+    }
   }
   return Object.entries(byTechGroup)
     .map(([group, techs]) => {
@@ -169,24 +173,38 @@ function accessorFor(dim, source) {
 }
 
 // Bucket rows by dimension value → Map(value → rows), skipping null buckets.
+// An accessor may return an array (e.g. a ticket's multiple groups) — the row
+// then lands in every one of those buckets rather than just one.
 function bucketBy(rows, accessor) {
   const buckets = new Map()
   for (const r of rows) {
     const v = accessor(r)
     if (v == null) continue
-    let b = buckets.get(v)
-    if (!b) { b = []; buckets.set(v, b) }
-    b.push(r)
+    const values = Array.isArray(v) ? v : [v]
+    for (const val of values) {
+      if (val == null) continue
+      let b = buckets.get(val)
+      if (!b) { b = []; buckets.set(val, b) }
+      b.push(r)
+    }
   }
   return buckets
 }
 
 function orderValues(buckets, dim, options = {}) {
   let vals = [...buckets.keys()]
-  if (dim.fixedOrder) {
-    vals = dim.fixedOrder.filter(v => buckets.has(v))
-  } else if (dim.isTime) {
+  const sort = options.sortOrder
+  if (dim.isTime) {
     vals.sort((a, b) => String(a).localeCompare(String(b)))
+  } else if (sort) {
+    // An explicit sort choice overrides even a dimension's fixedOrder (e.g. status/priority).
+    const labelOf = v => dim.valueLabel ? dim.valueLabel(v) : String(v)
+    if (sort === 'label-asc')       vals.sort((a, b) => labelOf(a).localeCompare(labelOf(b), 'fr'))
+    else if (sort === 'label-desc') vals.sort((a, b) => labelOf(b).localeCompare(labelOf(a), 'fr'))
+    else if (sort === 'value-asc')  vals.sort((a, b) => buckets.get(a).length - buckets.get(b).length)
+    else /* value-desc */           vals.sort((a, b) => buckets.get(b).length - buckets.get(a).length)
+  } else if (dim.fixedOrder) {
+    vals = dim.fixedOrder.filter(v => buckets.has(v))
   } else {
     vals.sort((a, b) => buckets.get(b).length - buckets.get(a).length)
   }
@@ -245,11 +263,13 @@ export function computeWidgetData(widget, ctx) {
   if (widget.chartType === 'heatmap') {
     const groupWeeks = new Map() // group → { week → { compliant, nonCompliant } }
     for (const t of rows) {
-      if (!t.group || !t.week) continue
-      if (!groupWeeks.has(t.group)) groupWeeks.set(t.group, {})
-      const weekMap = groupWeeks.get(t.group)
-      if (!weekMap[t.week]) weekMap[t.week] = { compliant: 0, nonCompliant: 0 }
-      weekMap[t.week][t.breached ? 'nonCompliant' : 'compliant']++
+      if (!t.groups?.length || !t.week) continue
+      for (const g of t.groups) {
+        if (!groupWeeks.has(g)) groupWeeks.set(g, {})
+        const weekMap = groupWeeks.get(g)
+        if (!weekMap[t.week]) weekMap[t.week] = { compliant: 0, nonCompliant: 0 }
+        weekMap[t.week][t.breached ? 'nonCompliant' : 'compliant']++
+      }
     }
     const groups = [...groupWeeks.entries()].map(([name, weekMap]) => ({ name, weekMap }))
     return { kind: 'heatmap', groups, meta: { filterKey: null } }
@@ -313,7 +333,10 @@ export function computeWidgetData(widget, ctx) {
         color: segDim.colors?.[sv] ?? CATEGORICAL_PALETTE[i % CATEGORICAL_PALETTE.length],
         targetH: targets[sv] ?? null,
         data: values.map(v => {
-          const subset = buckets.get(v).filter(r => segAccessor(r) === sv)
+          const subset = buckets.get(v).filter(r => {
+            const rv = segAccessor(r)
+            return Array.isArray(rv) ? rv.includes(sv) : rv === sv
+          })
           return subset.length ? metric.compute(subset) : (widget.metric === 'count' ? 0 : null)
         }),
       }

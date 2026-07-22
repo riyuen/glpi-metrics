@@ -96,6 +96,11 @@ describe('autoTitle', () => {
     expect(autoTitle({ kind: 'chart', metric: 'count', dimension: 'period' }, 'month')).toBe('Nombre de tickets par mois')
   })
 
+  it('resolves the "closePeriod" pseudo-dimension via the period toggle', () => {
+    expect(autoTitle({ kind: 'chart', metric: 'count', dimension: 'closePeriod' }, 'week')).toBe('Nombre de tickets par semaine de clôture')
+    expect(autoTitle({ kind: 'chart', metric: 'count', dimension: 'closePeriod' }, 'month')).toBe('Nombre de tickets par mois de clôture')
+  })
+
   it('appends the segment dimension label when segmented', () => {
     expect(autoTitle({ kind: 'chart', metric: 'count', dimension: 'group', segmentBy: 'compliance' }))
       .toBe(`Nombre de tickets par groupe — ${DIMENSIONS.compliance.label}`)

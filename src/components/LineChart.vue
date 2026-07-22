@@ -11,17 +11,21 @@
 import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 import Chart from 'chart.js/auto'
 import ChartDataLabels from 'chartjs-plugin-datalabels'
+import { withAlpha } from '../lib/colors.js'
 
 const props = defineProps({
   title: String,
   labels: Array,
   data: Array,
+  color: { type: String, default: null },
   theme: { type: String, default: 'dark' },
   highlightedPeriods: { type: Array, default: () => [] },
   // appended to values in tooltips/labels ('', '%', 'h', 'j', …)
   valueSuffix: { type: String, default: '' },
 })
 const emit = defineEmits(['item-click'])
+
+const baseColor = computed(() => props.color || '#38bdf8')
 
 const C = computed(() => props.theme === 'light'
   ? { tick: '#475569', grid: '#cbd5e1', gridFaint: '#f1f5f9' }
@@ -39,7 +43,7 @@ function buildChart() {
 
   const hl = new Set(props.highlightedPeriods)
   const hasHl = hl.size > 0
-  const pointColors  = props.labels.map((l) => hasHl && !hl.has(l) ? 'rgba(56,189,248,0.2)' : '#38bdf8')
+  const pointColors  = props.labels.map((l) => hasHl && !hl.has(l) ? withAlpha(baseColor.value, 0.2) : baseColor.value)
   const pointRadii   = props.labels.map((l) => hasHl && !hl.has(l) ? 3 : 5)
   const labelColors  = props.labels.map((l) => hasHl && !hl.has(l) ? 'transparent' : C.value.tick)
 
@@ -51,8 +55,8 @@ function buildChart() {
       datasets: [
         {
           data: props.data,
-          borderColor: '#38bdf8',
-          backgroundColor: hasHl ? 'rgba(56,189,248,0.03)' : 'rgba(56,189,248,0.08)',
+          borderColor: baseColor.value,
+          backgroundColor: withAlpha(baseColor.value, hasHl ? 0.03 : 0.08),
           borderWidth: 2,
           tension: 0.3,
           fill: true,
@@ -105,7 +109,7 @@ function buildChart() {
 }
 
 onMounted(() => {
-  watch([() => props.labels, () => props.data, () => props.theme, () => props.highlightedPeriods], buildChart, { deep: true, immediate: true })
+  watch([() => props.labels, () => props.data, () => props.color, () => props.theme, () => props.highlightedPeriods], buildChart, { deep: true, immediate: true })
 })
 
 onUnmounted(() => {

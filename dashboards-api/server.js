@@ -73,10 +73,18 @@ const server = http.createServer((req, res) => {
         res.end('Invalid document shape: expected { version: 1, dashboards: [...] }')
         return
       }
+      const current = readDoc()
+      const currentRev = current?.rev ?? 0
+      if (current != null && (doc.rev ?? 0) !== currentRev) {
+        res.writeHead(409, { 'Content-Type': 'application/json' })
+        res.end(JSON.stringify({ error: 'conflict', current }))
+        return
+      }
       try {
-        writeDocAtomic(doc)
-        res.writeHead(204)
-        res.end()
+        const newRev = currentRev + 1
+        writeDocAtomic({ ...doc, rev: newRev })
+        res.writeHead(200, { 'Content-Type': 'application/json' })
+        res.end(JSON.stringify({ rev: newRev }))
       } catch (e) {
         res.writeHead(500, { 'Content-Type': 'text/plain' })
         res.end(`Write failed: ${e.message}`)

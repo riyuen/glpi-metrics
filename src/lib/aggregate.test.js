@@ -8,17 +8,23 @@ const emptyActiveFilters = () => ({
   statuses: [], priorities: [], groups: [], entities: [], compliance: null, periods: [],
 })
 
-function mkTicket(overrides = {}) {
+// `group` is a convenience shorthand for the common single-group case —
+// it's converted to the real `groups` array field. Pass `group: null` for a
+// ticket with no group, or `groups: [...]` directly for a multi-group ticket.
+function mkTicket({ group, groups, ...overrides } = {}) {
   return {
     status: 1,
     priority: 3,
     type: 1,
-    group: 'N1',
+    groups: groups ?? (group === undefined ? ['N1'] : (group == null ? [] : [group])),
     entity: 'Siege',
     category: 'Reseau',
+    location: 'Site A',
     breached: false,
     week: '2026-W01',
     month: '2026-01',
+    closeWeek: null,
+    closeMonth: null,
     date: '2026-01-05 10:00:00',
     resolveMs: null,
     actualTTOMs: null,
@@ -36,10 +42,10 @@ function mkTicket(overrides = {}) {
   }
 }
 
-function mkSatRow(overrides = {}) {
+function mkSatRow({ group, groups, ...overrides } = {}) {
   return {
     score: 5,
-    group: 'N1',
+    groups: groups ?? (group === undefined ? ['N1'] : (group == null ? [] : [group])),
     date: '2026-01-05 10:00:00',
     requester: null,
     technician: null,
@@ -122,8 +128,8 @@ describe('applyGlobalFilters', () => {
 })
 
 describe('applyWidgetFilters', () => {
-  const t1 = mkTicket({ status: 1, priority: 3, group: 'N1', entity: 'Siege', category: 'Reseau', type: 1, breached: false, hasNoTTO: false, date: '2026-01-15 10:00:00' })
-  const t2 = mkTicket({ status: 2, priority: 4, group: 'N2', entity: 'Antenne', category: 'Materiel', type: 2, breached: true, hasNoTTO: true, date: '2026-01-05 10:00:00' })
+  const t1 = mkTicket({ status: 1, priority: 3, group: 'N1', entity: 'Siege', category: 'Reseau', location: 'Site A', type: 1, breached: false, hasNoTTO: false, date: '2026-01-15 10:00:00' })
+  const t2 = mkTicket({ status: 2, priority: 4, group: 'N2', entity: 'Antenne', category: 'Materiel', location: 'Site B', type: 2, breached: true, hasNoTTO: true, date: '2026-01-05 10:00:00' })
 
   it('passes through when filters is undefined', () => {
     expect(applyWidgetFilters([t1, t2], undefined, 'tickets')).toEqual([t1, t2])
@@ -139,6 +145,7 @@ describe('applyWidgetFilters', () => {
     expect(applyWidgetFilters([t1, t2], { group: ['N1'] }, 'tickets')).toEqual([t1])
     expect(applyWidgetFilters([t1, t2], { entity: ['Antenne'] }, 'tickets')).toEqual([t2])
     expect(applyWidgetFilters([t1, t2], { category: ['Reseau'] }, 'tickets')).toEqual([t1])
+    expect(applyWidgetFilters([t1, t2], { location: ['Site B'] }, 'tickets')).toEqual([t2])
     expect(applyWidgetFilters([t1, t2], { type: [2] }, 'tickets')).toEqual([t2])
   })
 
@@ -351,6 +358,25 @@ describe('computeWidgetData', () => {
     })
   })
 
+  it('an explicit sortOrder overrides the dimension\'s fixedOrder (status, alphabetical)', () => {
+    const widget = { kind: 'chart', metric: 'count', dimension: 'status', chartType: 'bar', filters: {}, options: { sortOrder: 'label-asc' } }
+    const result = computeWidgetData(widget, baseCtx())
+    expect(result.labels).toEqual(['En cours', 'Nouveau', 'Résolu'])
+  })
+
+  it('sortOrder value-asc orders a non-fixed dimension by ascending bucket size', () => {
+    const rows = [
+      mkTicket({ category: 'Reseau' }),
+      mkTicket({ category: 'Reseau' }),
+      mkTicket({ category: 'Materiel' }),
+    ]
+    const widget = { kind: 'chart', metric: 'count', dimension: 'category', chartType: 'bar', filters: {}, options: { sortOrder: 'value-asc' } }
+    const ctx = { tickets: rows, satisfaction: [], activeFilters: emptyActiveFilters(), period: 'week' }
+    const result = computeWidgetData(widget, ctx)
+    expect(result.labels).toEqual(['Materiel', 'Reseau'])
+    expect(result.series[0].data).toEqual([1, 2])
+  })
+
   it('segmented/stacked chart splits into one series per segment value', () => {
     const widget = { kind: 'chart', metric: 'count', dimension: 'group', segmentBy: 'compliance', chartType: 'stackedBar', filters: {} }
     const result = computeWidgetData(widget, baseCtx())
@@ -417,6 +443,36 @@ describe('computeWidgetData', () => {
         highlighted: null, dimmedValues: null, percent: false, isDuration: false, unit: null,
       },
     })
+  })
+
+  it('closeWeek/closeMonth dimensions bucket by solve date, skipping rows with no close date', () => {
+    const rows = [
+      mkTicket({ status: 5, closeWeek: '2026-W03', closeMonth: '2026-01' }),
+      mkTicket({ status: 5, closeWeek: '2026-W03', closeMonth: '2026-01' }),
+      mkTicket({ status: 6, closeWeek: '2026-W04', closeMonth: '2026-02' }),
+      mkTicket({ status: 1, closeWeek: null, closeMonth: null }), // still open — no close date
+    ]
+    const ctx = { tickets: rows, satisfaction: [], activeFilters: emptyActiveFilters(), period: 'week' }
+    const widget = { kind: 'chart', metric: 'count', dimension: 'closeWeek', chartType: 'line', filters: {} }
+    const result = computeWidgetData(widget, ctx)
+    expect(result.labels).toEqual(['2026-W03', '2026-W04'])
+    expect(result.series[0].data).toEqual([2, 1])
+    expect(result.meta.filterKey).toBeNull()
+    expect(result.meta.isTime).toBe(true)
+  })
+
+  it('closePeriod pseudo-dimension resolves to closeWeek/closeMonth via the period toggle', () => {
+    const rows = [
+      mkTicket({ status: 5, closeWeek: '2026-W03', closeMonth: '2026-01' }),
+      mkTicket({ status: 6, closeWeek: '2026-W04', closeMonth: '2026-02' }),
+    ]
+    const widget = { kind: 'chart', metric: 'count', dimension: 'closePeriod', chartType: 'line', filters: {} }
+
+    const weekCtx = { tickets: rows, satisfaction: [], activeFilters: emptyActiveFilters(), period: 'week' }
+    expect(computeWidgetData(widget, weekCtx).labels).toEqual(['2026-W03', '2026-W04'])
+
+    const monthCtx = { tickets: rows, satisfaction: [], activeFilters: emptyActiveFilters(), period: 'month' }
+    expect(computeWidgetData(widget, monthCtx).labels).toEqual(['2026-01', '2026-02'])
   })
 
   it('dims (does not hide) values excluded by the widget\'s own-dimension global filter', () => {

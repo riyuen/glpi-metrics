@@ -3,7 +3,7 @@
 // dashboards (there's no auth anywhere in this app, so no per-user scoping).
 // Backed by the tiny dashboards-api service (GET/PUT /api/dashboards), which
 // stores one JSON file on the same volume the Airflow DAG writes metrics to.
-import { reactive, ref, computed, watch } from 'vue'
+import { reactive, ref, computed, watch, nextTick } from 'vue'
 import {
   DEFAULT_WIDGETS, newWidgetId,
   LEGACY_CHART_IDS, LEGACY_CARD_IDS, legacyChartSeedId, legacyCardSeedId,
@@ -95,6 +95,9 @@ async function fetchServerDoc() {
   }
 }
 
+// Returns { ok: true, rev } on success, { ok: false, conflict: true } if the
+// server rejects the write because someone else saved a newer revision first,
+// or { ok: false } on any other failure.
 async function persistDoc(d) {
   try {
     // POST, not PUT: some front-line WAFs/proxies block PUT by default.
@@ -103,48 +106,81 @@ async function persistDoc(d) {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(d),
     })
+    if (res.status === 409) return { ok: false, conflict: true }
     if (!res.ok) throw new Error(`HTTP ${res.status}`)
-    return true
+    const { rev } = await res.json()
+    return { ok: true, rev }
   } catch (e) {
     console.error('Failed to save dashboards to the server:', e)
-    return false
+    return { ok: false }
   }
 }
 
 // ── Reactive state ────────────────────────────────────────────────────────────
-const doc = reactive({ version: 1, activeId: null, dashboards: [] })
+const doc = reactive({ version: 1, rev: 0, activeId: null, dashboards: [] })
 const ready = ref(false)
-const saveStatus = ref('idle') // 'idle' | 'saving' | 'saved' | 'error'
+const dirty = ref(false)
+const saveStatus = ref('idle') // 'idle' | 'saving' | 'saved' | 'error' | 'conflict'
 let savedStatusTimer = null
+let suppressDirty = false
+
+function applyDoc(d) {
+  suppressDirty = true
+  doc.version = d.version
+  doc.rev = d.rev ?? 0
+  doc.activeId = d.activeId
+  doc.dashboards = d.dashboards
+  nextTick(() => { suppressDirty = false })
+}
 
 async function init() {
   const fromServer = await fetchServerDoc()
-  const initial = fromServer ?? loadLocalSeed()
-  doc.version = initial.version
-  doc.activeId = initial.activeId
-  doc.dashboards = initial.dashboards
+  applyDoc(fromServer ?? loadLocalSeed())
   ready.value = true
-  if (!fromServer) await persistDoc(doc) // seed the server with this browser's state
+  if (!fromServer) await save() // seed the server with this browser's state
 }
 
 init()
 
-let saveTimer = null
 watch(doc, () => {
-  if (!ready.value) return
-  clearTimeout(saveTimer)
-  saveTimer = setTimeout(() => { save() }, 250)
+  if (!ready.value || suppressDirty) return
+  dirty.value = true
 }, { deep: true })
 
-// Manual save — bypasses the debounce so a click always saves right now
-// and surfaces whether it actually reached the server.
+if (typeof window !== 'undefined') {
+  window.addEventListener('beforeunload', (e) => {
+    if (!dirty.value) return
+    e.preventDefault()
+    e.returnValue = ''
+  })
+}
+
+// Only thing that talks to the network — fired by an explicit user action
+// (the Save button), never automatically on edit.
 async function save() {
-  clearTimeout(saveTimer)
+  if (saveStatus.value === 'saving') return
   clearTimeout(savedStatusTimer)
   saveStatus.value = 'saving'
-  const ok = await persistDoc(doc)
-  saveStatus.value = ok ? 'saved' : 'error'
-  if (ok) savedStatusTimer = setTimeout(() => { saveStatus.value = 'idle' }, 2000)
+  const result = await persistDoc(doc)
+  if (result.ok) {
+    doc.rev = result.rev
+    dirty.value = false
+    saveStatus.value = 'saved'
+    savedStatusTimer = setTimeout(() => { saveStatus.value = 'idle' }, 2000)
+  } else if (result.conflict) {
+    saveStatus.value = 'conflict'
+  } else {
+    saveStatus.value = 'error'
+  }
+}
+
+// Recovery path from a conflict: discard local edits and pull the latest
+// server state instead of overwriting it.
+async function reloadFromServer() {
+  const fromServer = await fetchServerDoc()
+  if (fromServer) applyDoc(fromServer)
+  dirty.value = false
+  saveStatus.value = 'idle'
 }
 
 const dashboards = computed(() => doc.dashboards)
@@ -238,8 +274,10 @@ function setSpan(id, span) {
 export function useDashboards() {
   return {
     ready,
+    dirty,
     saveStatus,
     save,
+    reloadFromServer,
     dashboards,
     activeDashboard,
     activeWidgets,

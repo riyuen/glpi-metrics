@@ -136,11 +136,12 @@ const selectedGroup   = ref(null)
 const selectedStatuses = ref([])
 const dropdownOpen    = ref(false)
 
-// All unique group names sorted by total ticket count (unfiltered)
+// All unique group names sorted by total ticket count (unfiltered).
+// A ticket with multiple groups is counted toward each of them.
 const allGroupNames = computed(() => {
   const map = {}
   for (const t of tickets.value) {
-    map[t.group] = (map[t.group] ?? 0) + 1
+    for (const g of t.groups ?? []) map[g] = (map[g] ?? 0) + 1
   }
   return Object.entries(map)
     .map(([name, total]) => ({ name, total }))
@@ -170,7 +171,7 @@ function complianceColor(pct) {
 const currentGroup = computed(() => {
   if (!selectedGroup.value) return null
 
-  let grouped = tickets.value.filter(t => t.group === selectedGroup.value)
+  let grouped = tickets.value.filter(t => t.groups?.includes(selectedGroup.value))
   if (selectedStatuses.value.length > 0) {
     grouped = grouped.filter(t => selectedStatuses.value.includes(t.status))
   }

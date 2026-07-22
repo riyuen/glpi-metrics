@@ -12,8 +12,8 @@
       <button
         class="bar-btn save-btn"
         :class="saveStatus"
-        :disabled="saveStatus === 'saving'"
-        @click="save"
+        :disabled="saveStatus === 'saving' || (saveStatus === 'idle' && !dirty)"
+        @click="onSaveClick"
       >{{ saveLabel }}</button>
     </div>
 
@@ -60,15 +60,21 @@ import { useFilters } from '../../composables/useFilters.js'
 
 const emit = defineEmits(['add-widget'])
 
-const { dashboards, activeDashboard, setActive, createDashboard, renameDashboard, duplicateDashboard, deleteDashboard, save, saveStatus } = useDashboards()
+const { dashboards, activeDashboard, setActive, createDashboard, renameDashboard, duplicateDashboard, deleteDashboard, save, saveStatus, dirty, reloadFromServer } = useDashboards()
 const { period } = useFilters()
 
 const saveLabel = computed(() => ({
-  idle: 'Enregistrer',
+  idle: dirty.value ? 'Enregistrer' : 'Enregistré',
   saving: 'Enregistrement…',
   saved: 'Enregistré ✓',
   error: 'Échec ⚠',
+  conflict: 'Conflit — recharger',
 }[saveStatus.value]))
+
+function onSaveClick() {
+  if (saveStatus.value === 'conflict') reloadFromServer()
+  else save()
+}
 
 const promptMode = ref(null) // null | 'create' | 'rename'
 const nameDraft = ref('')
@@ -143,7 +149,9 @@ function confirmDelete() {
 
 .save-btn.saved { border-color: #22c55e; color: #22c55e; }
 .save-btn.error { border-color: #ef4444; color: #ef4444; }
+.save-btn.conflict { border-color: #f59e0b; color: #f59e0b; }
 .save-btn:disabled { opacity: 0.7; cursor: wait; }
+.save-btn:disabled.idle { cursor: default; }
 
 .period-toggle { display: flex; gap: 6px; }
 .period-toggle button {
