@@ -40,6 +40,7 @@
               class="heat-cell"
               :style="cellStyle(g, w)"
               :title="cellTitle(g, w)"
+              @click="emit('cell-click', { group: g.name, week: w })"
             >
               <span class="cell-text">{{ cellText(g, w) }}</span>
             </td>
@@ -65,6 +66,7 @@ const props = defineProps({
   groups: Array, // Array<{ name, weekMap: Record<week, { compliant, nonCompliant }> }>
   theme:  { type: String, default: 'dark' },
 })
+const emit = defineEmits(['cell-click'])
 
 // Custom directive to close dropdown on outside click
 const vClickOutside = {
@@ -325,7 +327,7 @@ function cellTitle(g, w) {
   text-align: center;
   border-radius: 4px;
   padding: 0 2px;
-  cursor: default;
+  cursor: pointer;
   transition: opacity 0.15s;
 }
 .heat-cell:hover {

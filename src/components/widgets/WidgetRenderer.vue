@@ -13,6 +13,7 @@
     :title="title"
     :groups="payload.groups"
     :theme="theme"
+    @cell-click="({ group, week }) => emit('cell-tickets', { group, week })"
   />
 
   <div v-else-if="payload.kind === 'empty' || !payload.labels?.length" class="chart-card empty-card">
@@ -110,7 +111,7 @@ const props = defineProps({
   theme: { type: String, default: 'dark' },
   period: { type: String, default: 'week' },
 })
-const emit = defineEmits(['select'])
+const emit = defineEmits(['select', 'cell-tickets'])
 
 const title = computed(() => displayTitle(props.widget, props.period))
 

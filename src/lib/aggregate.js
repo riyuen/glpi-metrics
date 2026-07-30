@@ -172,6 +172,20 @@ function accessorFor(dim, source) {
   return source === 'tickets' ? dim.accessor : dim.satAccessor
 }
 
+// A dimension's accessor may return an array (currently only 'group' — a ticket can carry
+// multiple groups). When the widget has its own filter on that same field, clamp the
+// array to just the filtered values so a matching row doesn't also create buckets for its
+// other, non-selected groups (mirrors the equivalent clamp in the heatmap branch above).
+function clampArrayAccessor(dim, accessor, widget) {
+  if (dim.filterKey !== 'groups') return accessor
+  const groupFilter = widget.filters?.group
+  if (!groupFilter?.length) return accessor
+  return r => {
+    const v = accessor(r)
+    return Array.isArray(v) ? v.filter(g => groupFilter.includes(g)) : v
+  }
+}
+
 // Bucket rows by dimension value → Map(value → rows), skipping null buckets.
 // An accessor may return an array (e.g. a ticket's multiple groups) — the row
 // then lands in every one of those buckets rather than just one.
@@ -261,10 +275,14 @@ export function computeWidgetData(widget, ctx) {
 
   // ── SLA compliance heatmap by group × week (special renderer) ─────────────
   if (widget.chartType === 'heatmap') {
+    // A ticket can belong to multiple groups; only surface the ones the widget's own
+    // group filter selected, not every group the matching ticket happens to also have.
+    const groupFilter = widget.filters?.group?.length ? widget.filters.group : null
     const groupWeeks = new Map() // group → { week → { compliant, nonCompliant } }
     for (const t of rows) {
       if (!t.groups?.length || !t.week) continue
-      for (const g of t.groups) {
+      const groupsForRow = groupFilter ? t.groups.filter(g => groupFilter.includes(g)) : t.groups
+      for (const g of groupsForRow) {
         if (!groupWeeks.has(g)) groupWeeks.set(g, {})
         const weekMap = groupWeeks.get(g)
         if (!weekMap[t.week]) weekMap[t.week] = { compliant: 0, nonCompliant: 0 }
@@ -279,7 +297,7 @@ export function computeWidgetData(widget, ctx) {
   const dimKey = resolveDimKey(widget.dimension, ctx.period)
   const dim = dimKey === 'custom' ? buildCustomDimension(widget.customGroups) : DIMENSIONS[dimKey]
   const source = metric.source
-  const accessor = dim ? accessorFor(dim, source) : null
+  const accessor = dim ? clampArrayAccessor(dim, accessorFor(dim, source), widget) : null
   if (!dim || !accessor) return { kind: 'empty' }
 
   const buckets = bucketBy(rows, accessor)
@@ -319,7 +337,7 @@ export function computeWidgetData(widget, ctx) {
   // ── Segmented (stacked / multi-series) ─────────────────────────────────────
   if (widget.segmentBy && (widget.segmentBy === 'custom' || DIMENSIONS[widget.segmentBy])) {
     const segDim = widget.segmentBy === 'custom' ? buildCustomDimension(widget.customGroups) : DIMENSIONS[widget.segmentBy]
-    const segAccessor = accessorFor(segDim, source)
+    const segAccessor = clampArrayAccessor(segDim, accessorFor(segDim, source), widget)
     const segBuckets = bucketBy(rows, segAccessor)
     const segValues = orderValues(segBuckets, segDim)
     const targets = (metric.isDuration && widget.options?.showTargets !== false)

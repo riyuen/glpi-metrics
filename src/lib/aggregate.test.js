@@ -389,6 +389,30 @@ describe('computeWidgetData', () => {
     ])
   })
 
+  it('group-dimension chart with a widget group filter excludes the other groups of a multi-group ticket', () => {
+    const rows = [
+      mkTicket({ groups: ['N1', 'N2'] }),
+      mkTicket({ group: 'N2' }),
+    ]
+    const widget = { kind: 'chart', metric: 'count', dimension: 'group', chartType: 'bar', filters: { group: ['N1'] } }
+    const ctx = { tickets: rows, satisfaction: [], activeFilters: emptyActiveFilters(), period: 'week' }
+    const result = computeWidgetData(widget, ctx)
+    expect(result.labels).toEqual(['N1'])
+    expect(result.series[0].data).toEqual([1])
+  })
+
+  it('segmented-by-group chart with a widget group filter excludes the other groups of a multi-group ticket', () => {
+    const rows = [
+      mkTicket({ groups: ['N1', 'N2'], breached: false }),
+      mkTicket({ group: 'N1', breached: true }),
+    ]
+    const widget = { kind: 'chart', metric: 'count', dimension: 'compliance', segmentBy: 'group', chartType: 'stackedBar', filters: { group: ['N1'] } }
+    const ctx = { tickets: rows, satisfaction: [], activeFilters: emptyActiveFilters(), period: 'week' }
+    const result = computeWidgetData(widget, ctx)
+    expect(result.series.map(s => s.name)).toEqual(['N1'])
+    expect(result.series[0].data).toEqual([1, 1])
+  })
+
   it('techTree chartType returns buildTechTree output for the same filtered rows', () => {
     const rows = [
       mkTicket({ group: 'N1', techName: 'Alice', resolveMs: 86400000 * 2 }),
@@ -415,6 +439,22 @@ describe('computeWidgetData', () => {
       groups: [
         { name: 'N1', weekMap: { '2026-W01': { compliant: 1, nonCompliant: 1 }, '2026-W02': { compliant: 1, nonCompliant: 0 } } },
         { name: 'N2', weekMap: { '2026-W01': { compliant: 0, nonCompliant: 1 } } },
+      ],
+      meta: { filterKey: null },
+    })
+  })
+
+  it('heatmap chartType with a widget group filter excludes the other groups of a multi-group ticket', () => {
+    const rows = [
+      mkTicket({ groups: ['N1', 'N2'], week: '2026-W01', breached: false }),
+      mkTicket({ group: 'N2', week: '2026-W01', breached: true }),
+    ]
+    const widget = { kind: 'chart', chartType: 'heatmap', metric: 'count', filters: { group: ['N1'] } }
+    const ctx = { tickets: rows, satisfaction: [], activeFilters: emptyActiveFilters(), period: 'week' }
+    expect(computeWidgetData(widget, ctx)).toEqual({
+      kind: 'heatmap',
+      groups: [
+        { name: 'N1', weekMap: { '2026-W01': { compliant: 1, nonCompliant: 0 } } },
       ],
       meta: { filterKey: null },
     })

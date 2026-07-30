@@ -27,6 +27,7 @@
             :theme="theme"
             :period="period"
             @select="({ filterKey, value }) => toggleFilter(filterKey, value)"
+            @cell-tickets="({ group, week }) => openHeatmapCellTickets(widget, group, week)"
           />
         </div>
       </WidgetShell>
@@ -123,6 +124,12 @@ function openTicketList(widget) {
     tickets = rows.map(r => byId.get(r.ticketId)).filter(Boolean)
   }
   ticketListDialog.value = { title: displayTitle(widget, period.value), tickets }
+}
+
+function openHeatmapCellTickets(widget, group, week) {
+  const rows = rowsForWidget(widget, ctx.value)
+  const tickets = rows.filter(t => t.week === week && t.groups?.includes(group))
+  ticketListDialog.value = { title: `${displayTitle(widget, period.value)} — ${group} (${week})`, tickets }
 }
 
 // ── Grid resize (drag the bottom-right handle, snaps to grid tracks) ─────────
