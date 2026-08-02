@@ -68,6 +68,15 @@ docker compose up -d airflow
 # Airflow UI: http://server:8080
 ```
 
+## Scheduled email export (optional)
+
+A dashboard can be rendered headlessly (screenshot + Excel + HTML email body)
+via the `dashboard-render` service (`profiles: ["cron"]`, so it's excluded
+from `docker compose up` and only runs on demand or from a scheduler).
+Scheduling and actually sending the email are left to Rundeck — see
+[`docs/rundeck-weekly-dashboard-export.md`](docs/rundeck-weekly-dashboard-export.md)
+for the full runbook.
+
 ## Notes
 
 - **Corporate proxy / self-signed SSL**: the Dockerfile uses `npm ci --strict-ssl=false` for environments with SSL inspection. Remove that flag if not needed.
