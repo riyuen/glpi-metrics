@@ -35,10 +35,10 @@ make sure:
 - The Rundeck SSH user can run `docker compose` in the repo's deployment
   directory — via docker group membership, or passwordless `sudo` scoped to
   `docker compose`.
-- A mail-sending tool is available on that node — `msmtp`, `mutt`, or a small
-  `smtplib` script — configured against whatever internal SMTP relay is
-  already used for other Rundeck job notifications. Reuse that relay; don't
-  stand up new mail infrastructure for this.
+- A mail-sending tool available on that node — `msmtp` is assumed below — to
+  send the message from a script step. **Reuse the SMTP relay Rundeck's own
+  notification plugin already sends through** (see step 3) rather than
+  configuring separate mail infrastructure/credentials.
 
 ## 2. Finding a dashboard's ID
 
@@ -58,6 +58,7 @@ Copy the `id` (looks like `d-<uuid>`) for the dashboard you want to export.
 |---|---|---|
 | `dashboard_id` | yes | from step 2 above |
 | `recipients` | yes | comma-separated email addresses |
+| `smtp_password` | yes | **Secure** option, bound to "Option value from Key Storage" (see step 3's Step 2) — never entered as plain text |
 
 **Node filter**: the single Docker-host node — both steps below need to run
 on it so they share a filesystem.
@@ -89,11 +90,48 @@ docker compose --profile cron run --rm \
 **Step 2 — send email** (node step, same node, runs after step 1 succeeds):
 read `dashboard.html` from that same execution's output directory as the
 email body, attach `dashboard.png` and `dashboard.xlsx`, send to
-`${option.recipients}`. Example using `msmtp`:
+`${option.recipients}` — **through the same SMTP relay Rundeck's own
+notification plugin already uses**, not a newly-configured one.
+
+Rundeck's stock email notification plugin can only attach the execution log,
+not arbitrary workspace files, which is why this is a script step instead of
+a notification — but there's no reason to stand up separate mail
+infrastructure just because of that. Reuse what's already there:
+
+1. On the Rundeck server, find the relay it already sends through (used by
+   its own job notifications):
+   ```bash
+   grep -i '^grails.mail' /etc/rundeck/rundeck-config.properties
+   ```
+   Note `grails.mail.host`, `grails.mail.port`, `grails.mail.username`, and
+   whether `grails.mail.props.mail.smtp.auth` / `...starttls.enable` are set.
+   Paths vary by install (e.g. `$RDECK_BASE/server/config/...` for a
+   non-package install) — search there if the path above doesn't exist.
+2. If the password isn't already in Rundeck's **Key Storage**, add it there
+   (Project → Key Storage → upload a Password-type key). Bind it to the
+   job's `smtp_password` option via "Option value from Key Storage" so it's
+   injected at execution time and never written to disk or shown in logs.
+3. Hardcode `smtp_host`/`smtp_port`/`smtp_user` (not secrets) directly in the
+   script below from what you found in step 1, and build the `msmtp` config
+   in-memory rather than as a persisted `~/.msmtprc`:
 
 ```bash
 OUT="/path/to/glpi-metrics/dashboard-render/output/${RD_JOB_EXECID}"
 DASHBOARD_NAME=$(grep -oP '(?<=<h2>).*?(?=</h2>)' "$OUT/dashboard.html")
+
+msmtp_config=$(mktemp)
+trap 'rm -f "$msmtp_config"' EXIT
+cat > "$msmtp_config" <<CONF
+account default
+host <smtp-host-from-step-1>
+port <smtp-port-from-step-1>
+auth on
+user <smtp-user-from-step-1>
+password ${option.smtp_password}
+tls on
+from <smtp-user-from-step-1>
+CONF
+chmod 600 "$msmtp_config"
 
 {
   echo "To: ${option.recipients}"
@@ -114,11 +152,12 @@ DASHBOARD_NAME=$(grep -oP '(?<=<h2>).*?(?=</h2>)' "$OUT/dashboard.html")
     base64 "$OUT/$f"
   done
   echo "--BOUNDARY--"
-} | msmtp -t
+} | msmtp -C "$msmtp_config" -t
 ```
 
-Adapt this to whatever mail tool and relay/credentials are actually
-configured on the host — this is illustrative, not a drop-in command.
+Set `tls`/`auth` above to match whatever `grails.mail.props.*` showed in
+step 1 — if Rundeck's relay doesn't use STARTTLS or auth, drop those lines
+to match.
 
 ## 4. Verification
 
